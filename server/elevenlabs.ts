@@ -19,31 +19,57 @@ export class ElevenLabsService {
       throw new Error("ElevenLabs API key not configured");
     }
 
-    const formData = new FormData();
-    formData.append("name", name);
-    if (description) {
-      formData.append("description", description);
-    }
+    return new Promise((resolve, reject) => {
+      const formData = new FormData();
+      formData.append("name", name);
+      if (description) {
+        formData.append("description", description);
+      }
 
-    files.forEach((filePath) => {
-      formData.append("files", fs.createReadStream(filePath));
+      files.forEach((filePath) => {
+        formData.append("files", fs.createReadStream(filePath));
+      });
+
+      formData.submit(
+        {
+          protocol: "https:",
+          host: "api.elevenlabs.io",
+          path: "/v1/voices/add",
+          method: "POST",
+          headers: {
+            "xi-api-key": this.apiKey,
+          },
+        },
+        (err, response) => {
+          if (err) {
+            return reject(new Error(`ElevenLabs API error: ${err.message}`));
+          }
+
+          let data = "";
+          response.on("data", (chunk) => {
+            data += chunk;
+          });
+
+          response.on("end", () => {
+            if (response.statusCode && response.statusCode >= 200 && response.statusCode < 300) {
+              try {
+                resolve(JSON.parse(data));
+              } catch (e) {
+                reject(new Error("Failed to parse ElevenLabs response"));
+              }
+            } else {
+              reject(
+                new Error(`ElevenLabs API error: ${response.statusCode} - ${data}`)
+              );
+            }
+          });
+
+          response.on("error", (error) => {
+            reject(new Error(`ElevenLabs API error: ${error.message}`));
+          });
+        }
+      );
     });
-
-    const response = await fetch(`${ELEVENLABS_API_BASE}/voices/add`, {
-      method: "POST",
-      headers: {
-        "xi-api-key": this.apiKey,
-        ...formData.getHeaders(),
-      },
-      body: formData as any,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
-    }
-
-    return await response.json();
   }
 
   async textToSpeech(
