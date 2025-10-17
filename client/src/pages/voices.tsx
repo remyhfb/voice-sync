@@ -145,11 +145,11 @@ export default function VoicesPage() {
                 <Label>Audio Samples</Label>
                 <FileUploadZone
                   accept="audio/*"
-                  maxSize={50 * 1024 * 1024}
+                  maxSize={11 * 1024 * 1024}
                   multiple
                   onFilesSelected={setAudioSamples}
                   title="Upload Audio Samples"
-                  description="Upload clear audio recordings with natural speech, emotion, and varied tone. MP3, WAV, M4A supported."
+                  description="Upload clear audio recordings with natural speech, emotion, and varied tone. MP3, WAV, M4A supported. Max 11MB per file."
                   icon="audio"
                 />
               </div>
