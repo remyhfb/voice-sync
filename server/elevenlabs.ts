@@ -27,7 +27,19 @@ export class ElevenLabsService {
       }
 
       files.forEach((filePath) => {
-        formData.append("files", fs.createReadStream(filePath));
+        const fileName = filePath.split('/').pop() || 'audio.wav';
+        const ext = fileName.split('.').pop()?.toLowerCase();
+        const contentType = 
+          ext === 'mp3' ? 'audio/mpeg' :
+          ext === 'wav' ? 'audio/wav' :
+          ext === 'm4a' ? 'audio/mp4' :
+          ext === 'ogg' ? 'audio/ogg' :
+          'audio/mpeg';
+        
+        formData.append("files", fs.createReadStream(filePath), {
+          filename: fileName,
+          contentType: contentType,
+        });
       });
 
       formData.submit(
