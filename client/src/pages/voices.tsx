@@ -99,10 +99,10 @@ export default function VoicesPage() {
       }
 
       const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
+      const audioUrl = URL.createObjectURL(new Blob([audioBlob], { type: 'audio/mpeg' }));
       const audio = new Audio(audioUrl);
       
-      audio.play();
+      await audio.play();
       
       audio.onended = () => {
         URL.revokeObjectURL(audioUrl);
@@ -112,10 +112,11 @@ export default function VoicesPage() {
         title: "Playing preview",
         description: "Listen to your cloned voice sample",
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Audio play error:", error);
       toast({
         title: "Error",
-        description: "Failed to play voice preview",
+        description: error.message || "Failed to play voice preview",
         variant: "destructive",
       });
     }
