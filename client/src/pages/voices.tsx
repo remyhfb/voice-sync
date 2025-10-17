@@ -100,23 +100,24 @@ export default function VoicesPage() {
 
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(new Blob([audioBlob], { type: 'audio/mpeg' }));
-      const audio = new Audio(audioUrl);
       
-      await audio.play();
-      
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);
-      };
+      // Open audio in new tab as fallback for environments with autoplay restrictions
+      window.open(audioUrl, '_blank');
 
       toast({
-        title: "Playing preview",
-        description: "Listen to your cloned voice sample",
+        title: "Preview ready",
+        description: "Voice preview opened in new tab",
       });
+      
+      // Cleanup after a delay
+      setTimeout(() => {
+        URL.revokeObjectURL(audioUrl);
+      }, 5000);
     } catch (error: any) {
-      console.error("Audio play error:", error);
+      console.error("Audio preview error:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to play voice preview",
+        description: error.message || "Failed to generate voice preview",
         variant: "destructive",
       });
     }
