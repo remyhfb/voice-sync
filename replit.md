@@ -125,6 +125,22 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 2025)
 
+### Manual Transcription Editing (Completed)
+- Added transcription editor that pauses processing at "awaiting_review" status
+- Users can review and edit transcribed text before voice generation
+- Save/Continue workflow with proper state management
+- Race condition prevention: Continue button disabled during unsaved changes
+- Error handling ensures edits are persisted before continuing
+- Backend re-fetches job to use edited transcription for voice synthesis
+
+### Audio-Video Merging (Completed)
+- FFmpeg-based merging produces final MP4 files with cloned voice audio
+- Automatically replaces original audio track with generated voice
+- Both audio-only and merged video files uploaded to object storage
+- Download UI shows prominent video download with audio as secondary option
+- Conditional merging: Only processes video if original upload included video
+- Progress tracking through merge phase (70% → 80% → 95% → 100%)
+
 ### Object Storage Integration
 - Completed full integration with Google Cloud Storage for file persistence
 - Generated audio files are now uploaded to object storage after creation
@@ -138,7 +154,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Job Processing Fixes
 - Fixed job polling to fetch specific jobs by ID instead of all jobs
-- Proper progress tracking through all pipeline stages (extraction → transcription → generation → upload)
+- Proper progress tracking through all pipeline stages (extraction → transcription → review → generation → merge → upload)
 - Real-time status updates via TanStack Query with 2-second polling intervals
 
 ## Setup Requirements
