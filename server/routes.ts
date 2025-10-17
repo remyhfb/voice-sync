@@ -174,6 +174,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/jobs/:id/transcription", async (req, res) => {
+    try {
+      const { transcription } = req.body;
+      const job = await storage.getProcessingJob(req.params.id);
+      
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      if (!transcription || typeof transcription !== "string") {
+        return res.status(400).json({ error: "Valid transcription text required" });
+      }
+
+      await storage.updateProcessingJob(req.params.id, {
+        editedTranscription: transcription,
+      });
+
+      const updatedJob = await storage.getProcessingJob(req.params.id);
+      res.json(updatedJob);
+    } catch (error: any) {
+      console.error("Error updating transcription:", error);
+      res.status(500).json({ error: "Failed to update transcription" });
+    }
+  });
+
+  app.post("/api/jobs/:id/continue", async (req, res) => {
+    try {
+      if (!process.env.ELEVENLABS_API_KEY) {
+        return res.status(503).json({ 
+          error: "Voice cloning service not configured. Please add your ElevenLabs API key to enable this feature." 
+        });
+      }
+
+      const job = await storage.getProcessingJob(req.params.id);
+      
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      if (job.status !== "awaiting_review") {
+        return res.status(400).json({ error: "Job is not awaiting review" });
+      }
+
+      await storage.updateProcessingJob(req.params.id, {
+        status: "processing",
+        progress: 70,
+      });
+
+      const updatedJob = await storage.getProcessingJob(req.params.id);
+      res.json(updatedJob);
+
+      continueVoiceGeneration(req.params.id).catch((error) => {
+        console.error("Error continuing voice generation:", error);
+        storage.updateProcessingJob(req.params.id, {
+          status: "failed",
+          metadata: {
+            ...job.metadata,
+            errorMessage: error.message,
+          },
+        });
+      });
+    } catch (error: any) {
+      console.error("Error continuing job:", error);
+      res.status(500).json({ error: "Failed to continue processing" });
+    }
+  });
+
   app.post("/api/jobs/process-video", upload.single("video"), async (req, res) => {
     try {
       if (!process.env.ELEVENLABS_API_KEY) {
@@ -227,35 +294,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  async function processVideoJob(jobId: string) {
+  async function continueVoiceGeneration(jobId: string) {
     const job = await storage.getProcessingJob(jobId);
-    if (!job || !job.videoPath || !job.voiceCloneId) return;
+    if (!job || !job.extractedAudioPath || !job.voiceCloneId || !job.transcription) {
+      throw new Error("Job not ready for voice generation");
+    }
 
     try {
-      await storage.updateProcessingJob(jobId, { progress: 10 });
-
-      const audioPath = `/tmp/${jobId}_audio.mp3`;
-      await ffmpegService.extractAudio(job.videoPath, audioPath);
-      
-      await storage.updateProcessingJob(jobId, {
-        progress: 30,
-        extractedAudioPath: audioPath,
-        metadata: {
-          ...job.metadata,
-          audioFormat: "mp3",
-        },
-      });
-
-      await storage.updateProcessingJob(jobId, { progress: 40, type: "transcription" });
-
-      const transcriptionService = new TranscriptionService();
-      const transcription = await transcriptionService.transcribeAudio(audioPath);
-
-      await storage.updateProcessingJob(jobId, {
-        progress: 60,
-        transcription,
-      });
-
       await storage.updateProcessingJob(jobId, { progress: 70, type: "voice_generation" });
 
       const voice = await storage.getVoiceClone(job.voiceCloneId);
@@ -263,8 +308,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error("Voice clone not found");
       }
 
+      const textToSynthesize = job.editedTranscription || job.transcription;
+
       const elevenlabs = new ElevenLabsService();
-      const audioBuffer = await elevenlabs.textToSpeech(transcription, voice.elevenLabsVoiceId);
+      const audioBuffer = await elevenlabs.textToSpeech(textToSynthesize, voice.elevenLabsVoiceId);
 
       const tempAudioPath = `/tmp/${jobId}_generated.mp3`;
       await fs.writeFile(tempAudioPath, audioBuffer);
@@ -313,9 +360,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
 
-      await fs.unlink(job.videoPath).catch(() => {});
-      await fs.unlink(audioPath).catch(() => {});
+      await fs.unlink(job.videoPath || "").catch(() => {});
+      await fs.unlink(job.extractedAudioPath).catch(() => {});
       await fs.unlink(tempAudioPath).catch(() => {});
+    } catch (error: any) {
+      console.error("Error in voice generation:", error);
+      await storage.updateProcessingJob(jobId, {
+        status: "failed",
+        metadata: {
+          ...job.metadata,
+          errorMessage: error.message,
+        },
+      });
+    }
+  }
+
+  async function processVideoJob(jobId: string) {
+    const job = await storage.getProcessingJob(jobId);
+    if (!job || !job.videoPath || !job.voiceCloneId) return;
+
+    try {
+      await storage.updateProcessingJob(jobId, { progress: 10 });
+
+      const audioPath = `/tmp/${jobId}_audio.mp3`;
+      await ffmpegService.extractAudio(job.videoPath, audioPath);
+      
+      await storage.updateProcessingJob(jobId, {
+        progress: 30,
+        extractedAudioPath: audioPath,
+        metadata: {
+          ...job.metadata,
+          audioFormat: "mp3",
+        },
+      });
+
+      await storage.updateProcessingJob(jobId, { progress: 40, type: "transcription" });
+
+      const transcriptionService = new TranscriptionService();
+      const transcription = await transcriptionService.transcribeAudio(audioPath);
+
+      await storage.updateProcessingJob(jobId, {
+        progress: 60,
+        transcription,
+        status: "awaiting_review",
+      });
     } catch (error: any) {
       console.error("Error processing video job:", error);
       await storage.updateProcessingJob(jobId, {

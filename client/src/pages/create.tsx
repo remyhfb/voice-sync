@@ -17,6 +17,7 @@ export default function CreatePage() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>("");
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const { toast } = useToast();
 
   const { data: voices = [], isLoading: voicesLoading } = useQuery<VoiceClone[]>({
@@ -50,7 +51,8 @@ export default function CreatePage() {
       });
 
       if (!response.ok) {
-        throw new Error(await response.text());
+        const errorData = await response.json().catch(() => ({ error: "Failed to process" }));
+        throw new Error(errorData.error || "Failed to start processing");
       }
 
       return response.json();
@@ -67,6 +69,54 @@ export default function CreatePage() {
       toast({
         title: "Error",
         description: error.message || "Failed to start processing",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const saveTranscriptionMutation = useMutation({
+    mutationFn: async (data: { jobId: string; transcription: string }) => {
+      return apiRequest("PATCH", `/api/jobs/${data.jobId}/transcription`, {
+        transcription: data.transcription,
+      });
+    },
+    onSuccess: () => {
+      if (currentJobId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs", currentJobId] });
+      }
+      setHasUnsavedChanges(false);
+      toast({
+        title: "Transcription saved",
+        description: "Your edited text will be used for voice generation",
+      });
+    },
+    onError: (error: Error) => {
+      setHasUnsavedChanges(true);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save transcription",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const continueProcessingMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      return apiRequest("POST", `/api/jobs/${jobId}/continue`, {});
+    },
+    onSuccess: () => {
+      if (currentJobId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs", currentJobId] });
+      }
+      toast({
+        title: "Processing resumed",
+        description: "Generating voice audio with your transcription",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to continue processing",
         variant: "destructive",
       });
     },
@@ -102,6 +152,11 @@ export default function CreatePage() {
           status: "pending",
         },
         {
+          id: "review",
+          label: "Review & Edit",
+          status: "pending",
+        },
+        {
           id: "generate",
           label: "Generate Cloned Voice",
           status: "pending",
@@ -129,8 +184,13 @@ export default function CreatePage() {
       {
         id: "transcribe",
         label: "Transcribe Speech",
-        status: currentJob.progress >= 60 ? "completed" : currentJob.progress > 30 ? "processing" : "pending",
+        status: currentJob.progress >= 60 || currentJob.status === "awaiting_review" ? "completed" : currentJob.progress > 30 ? "processing" : "pending",
         progress: currentJob.progress >= 30 && currentJob.progress < 60 ? currentJob.progress : undefined,
+      },
+      {
+        id: "review",
+        label: "Review & Edit",
+        status: currentJob.status === "awaiting_review" ? "processing" : currentJob.progress > 60 ? "completed" : "pending",
       },
       {
         id: "generate",
@@ -201,7 +261,7 @@ export default function CreatePage() {
                     <p className="text-sm text-muted-foreground mb-2">
                       No voice clones available yet
                     </p>
-                    <Button variant="link" asChild>
+                    <Button variant="ghost" asChild>
                       <a href="/voices">Create your first voice clone</a>
                     </Button>
                   </div>
@@ -229,10 +289,52 @@ export default function CreatePage() {
           </Card>
 
           {currentJob?.transcription && (
-            <TranscriptionEditor
-              transcription={currentJob.transcription}
-              disabled={currentJob.status === "processing"}
-            />
+            <>
+              <TranscriptionEditor
+                transcription={currentJob.editedTranscription || currentJob.transcription}
+                disabled={currentJob.status !== "awaiting_review"}
+                onSave={(text) => {
+                  if (currentJob.id) {
+                    saveTranscriptionMutation.mutate({ jobId: currentJob.id, transcription: text });
+                  }
+                }}
+                onHasUnsavedChanges={setHasUnsavedChanges}
+              />
+              
+              {currentJob.status === "awaiting_review" && (
+                <Card className="p-6 bg-primary/5 border-primary/20">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-1">
+                      <h3 className="font-semibold mb-1">Review Complete?</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {hasUnsavedChanges
+                          ? "You have unsaved changes. Please save before continuing."
+                          : currentJob.editedTranscription 
+                          ? "You've edited the transcription. Click continue to generate voice audio with your changes."
+                          : "Review the transcription above. You can edit it or continue with the original text."}
+                      </p>
+                    </div>
+                    <Button
+                      onClick={() => currentJob.id && continueProcessingMutation.mutate(currentJob.id)}
+                      disabled={continueProcessingMutation.isPending || hasUnsavedChanges || saveTranscriptionMutation.isPending}
+                      data-testid="button-continue-processing"
+                    >
+                      {continueProcessingMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Starting...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          Continue
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </Card>
+              )}
+            </>
           )}
 
           <Separator />
@@ -268,7 +370,7 @@ export default function CreatePage() {
               audioDuration={currentJob.metadata?.generatedAudioDuration}
               audioSize={0}
               transcription={currentJob.transcription || undefined}
-              metadata={currentJob.metadata}
+              metadata={currentJob.metadata || undefined}
             />
           )}
         </div>

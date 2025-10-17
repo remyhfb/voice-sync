@@ -9,12 +9,14 @@ interface TranscriptionEditorProps {
   transcription: string;
   onSave?: (text: string) => void;
   disabled?: boolean;
+  onHasUnsavedChanges?: (hasChanges: boolean) => void;
 }
 
 export function TranscriptionEditor({ 
   transcription, 
   onSave,
-  disabled = false 
+  disabled = false,
+  onHasUnsavedChanges
 }: TranscriptionEditorProps) {
   const [text, setText] = useState(transcription);
   const [hasChanges, setHasChanges] = useState(false);
@@ -22,16 +24,18 @@ export function TranscriptionEditor({
   useEffect(() => {
     setText(transcription);
     setHasChanges(false);
-  }, [transcription]);
+    onHasUnsavedChanges?.(false);
+  }, [transcription, onHasUnsavedChanges]);
 
   const handleChange = (value: string) => {
     setText(value);
-    setHasChanges(value !== transcription);
+    const changed = value !== transcription;
+    setHasChanges(changed);
+    onHasUnsavedChanges?.(changed);
   };
 
   const handleSave = () => {
     onSave?.(text);
-    setHasChanges(false);
   };
 
   const wordCount = text.trim().split(/\s+/).length;
