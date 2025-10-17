@@ -24,6 +24,7 @@ export default function VoicesPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [voiceName, setVoiceName] = useState("");
   const [audioSamples, setAudioSamples] = useState<File[]>([]);
+  const [audioElement] = useState(() => new Audio());
   const { toast } = useToast();
 
   const { data: voices = [], isLoading } = useQuery<VoiceClone[]>({
@@ -90,6 +91,11 @@ export default function VoicesPage() {
 
   const handlePlayVoice = async (voiceId: string) => {
     try {
+      toast({
+        title: "Generating preview...",
+        description: "Creating voice sample with ElevenLabs",
+      });
+
       const response = await fetch(`/api/voices/${voiceId}/preview`, {
         method: "POST",
       });
@@ -101,18 +107,35 @@ export default function VoicesPage() {
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(new Blob([audioBlob], { type: 'audio/mpeg' }));
       
-      // Open audio in new tab as fallback for environments with autoplay restrictions
-      window.open(audioUrl, '_blank');
-
-      toast({
-        title: "Preview ready",
-        description: "Voice preview opened in new tab",
-      });
+      // Use inline audio element to avoid Replit production blob: URL routing issues
+      audioElement.src = audioUrl;
       
-      // Cleanup after a delay
-      setTimeout(() => {
-        URL.revokeObjectURL(audioUrl);
-      }, 5000);
+      try {
+        await audioElement.play();
+        
+        toast({
+          title: "Playing preview",
+          description: "Listen to your cloned voice sample",
+        });
+        
+        // Cleanup after playback
+        audioElement.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+        };
+      } catch (playError: any) {
+        // If autoplay is blocked, provide download option
+        const link = document.createElement('a');
+        link.href = audioUrl;
+        link.download = 'voice-preview.mp3';
+        link.click();
+        
+        toast({
+          title: "Preview downloaded",
+          description: "Audio file saved to your downloads",
+        });
+        
+        setTimeout(() => URL.revokeObjectURL(audioUrl), 1000);
+      }
     } catch (error: any) {
       console.error("Audio preview error:", error);
       toast({
