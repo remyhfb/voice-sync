@@ -97,33 +97,44 @@ export class ElevenLabsService {
       throw new Error("ElevenLabs API key not configured");
     }
 
-    const response = await fetch(
-      `${ELEVENLABS_API_BASE}/text-to-speech/${voiceId}`,
-      {
-        method: "POST",
-        headers: {
-          "xi-api-key": this.apiKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text,
-          model_id: "eleven_multilingual_v2",
-          voice_settings: {
-            similarity_boost: options.similarity_boost ?? 0.75,
-            stability: options.stability ?? 0.5,
-            style: options.style ?? 0,
+    console.log(`[TTS] Calling ElevenLabs API for voice ${voiceId}, text length: ${text.length}`);
+    
+    try {
+      const response = await fetch(
+        `${ELEVENLABS_API_BASE}/text-to-speech/${voiceId}`,
+        {
+          method: "POST",
+          headers: {
+            "xi-api-key": this.apiKey,
+            "Content-Type": "application/json",
           },
-        }),
-      },
-    );
+          body: JSON.stringify({
+            text,
+            model_id: "eleven_multilingual_v2",
+            voice_settings: {
+              similarity_boost: options.similarity_boost ?? 0.75,
+              stability: options.stability ?? 0.5,
+              style: options.style ?? 0,
+            },
+          }),
+        },
+      );
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
+      console.log(`[TTS] Response status: ${response.status} ${response.statusText}`);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[TTS] Error response body: ${errorText}`);
+        throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      console.log(`[TTS] Received audio buffer: ${arrayBuffer.byteLength} bytes`);
+      return Buffer.from(arrayBuffer);
+    } catch (error) {
+      console.error(`[TTS] Exception during text-to-speech:`, error);
+      throw error;
     }
-
-    const arrayBuffer = await response.arrayBuffer();
-    return Buffer.from(arrayBuffer);
   }
 
   async getVoice(voiceId: string): Promise<any> {

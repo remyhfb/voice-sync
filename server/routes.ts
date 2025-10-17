@@ -56,6 +56,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/voices", async (req, res) => {
     try {
       const voices = await storage.getAllVoiceClones();
+      console.log('[DEBUG] Voices in storage:', voices.map(v => ({ 
+        id: v.id, 
+        name: v.name, 
+        elevenLabsVoiceId: v.elevenLabsVoiceId, 
+        status: v.status 
+      })));
       res.json(voices);
     } catch (error) {
       console.error("Error fetching voices:", error);
