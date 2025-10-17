@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Plus, Mic, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { VoiceClone } from "@shared/schema";
 
 export default function VoicesPage() {
+  const [, setLocation] = useLocation();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [voiceName, setVoiceName] = useState("");
   const [audioSamples, setAudioSamples] = useState<File[]>([]);
@@ -275,7 +277,7 @@ export default function VoicesPage() {
               key={voice.id}
               voiceClone={voice}
               onPlay={() => handlePlayVoice(voice.id)}
-              onUse={() => window.location.href = "/create"}
+              onUse={() => setLocation("/")}
               onDelete={() => deleteVoiceMutation.mutate(voice.id)}
             />
           ))}
