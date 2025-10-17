@@ -78,6 +78,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/voices", upload.array("samples"), async (req, res) => {
     try {
+      if (!process.env.ELEVENLABS_API_KEY) {
+        return res.status(503).json({ 
+          error: "Voice cloning service not configured. Please add your ElevenLabs API key to enable this feature." 
+        });
+      }
+
       const { name } = req.body;
       const files = req.files as Express.Multer.File[];
 
@@ -170,6 +176,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/jobs/process-video", upload.single("video"), async (req, res) => {
     try {
+      if (!process.env.ELEVENLABS_API_KEY) {
+        return res.status(503).json({ 
+          error: "Voice cloning service not configured. Please add your ElevenLabs API key to enable this feature." 
+        });
+      }
+
       const { voiceCloneId } = req.body;
       const videoFile = req.file;
 
