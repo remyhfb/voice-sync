@@ -88,6 +88,39 @@ export default function VoicesPage() {
     },
   });
 
+  const handlePlayVoice = async (voiceId: string) => {
+    try {
+      const response = await fetch(`/api/voices/${voiceId}/preview`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate preview");
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      
+      audio.play();
+      
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      toast({
+        title: "Playing preview",
+        description: "Listen to your cloned voice sample",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to play voice preview",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleCreateVoice = () => {
     if (!voiceName || audioSamples.length === 0) return;
     createVoiceMutation.mutate({ name: voiceName, files: audioSamples });
@@ -216,8 +249,8 @@ export default function VoicesPage() {
             <VoiceCloneCard
               key={voice.id}
               voiceClone={voice}
-              onPlay={() => console.log("Play", voice.id)}
-              onUse={() => window.location.href = "/"}
+              onPlay={() => handlePlayVoice(voice.id)}
+              onUse={() => window.location.href = "/create"}
               onDelete={() => deleteVoiceMutation.mutate(voice.id)}
             />
           ))}
