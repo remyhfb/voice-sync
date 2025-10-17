@@ -316,12 +316,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tempAudioPath = `/tmp/${jobId}_generated.mp3`;
       await fs.writeFile(tempAudioPath, audioBuffer);
 
-      await storage.updateProcessingJob(jobId, { progress: 90 });
+      await storage.updateProcessingJob(jobId, { progress: 80, type: "merging" });
 
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      const audioUploadURL = await objectStorageService.getObjectEntityUploadURL();
       
       const audioStream = await fs.readFile(tempAudioPath);
-      const uploadResponse = await fetch(uploadURL, {
+      const audioUploadResponse = await fetch(audioUploadURL, {
         method: "PUT",
         body: audioStream,
         headers: {
@@ -329,34 +329,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
 
-      if (!uploadResponse.ok) {
+      if (!audioUploadResponse.ok) {
         throw new Error("Failed to upload generated audio");
       }
 
-      const urlObj = new URL(uploadURL);
-      const pathParts = urlObj.pathname.split("/");
-      const bucket = pathParts[1];
-      const objectPath = pathParts.slice(2).join("/");
+      const audioUrlObj = new URL(audioUploadURL);
+      const audioPathParts = audioUrlObj.pathname.split("/");
+      const audioBucket = audioPathParts[1];
+      const audioObjectPath = audioPathParts.slice(2).join("/");
       
       const privateDir = objectStorageService.getPrivateObjectDir();
       const [privateDirBucket, ...privateDirPathParts] = privateDir.split("/");
       const privateDirPath = privateDirPathParts.join("/");
       
       let generatedAudioPath: string;
-      if (bucket === privateDirBucket && objectPath.startsWith(privateDirPath)) {
-        generatedAudioPath = `/objects/${objectPath.replace(privateDirPath + "/", "")}`;
+      if (audioBucket === privateDirBucket && audioObjectPath.startsWith(privateDirPath)) {
+        generatedAudioPath = `/objects/${audioObjectPath.replace(privateDirPath + "/", "")}`;
       } else {
-        generatedAudioPath = `/objects/${objectPath}`;
+        generatedAudioPath = `/objects/${audioObjectPath}`;
+      }
+
+      let mergedVideoPath: string | undefined;
+      
+      if (job.videoPath) {
+        const tempMergedPath = `/tmp/${jobId}_merged.mp4`;
+        await ffmpegService.mergeAudioVideo(job.videoPath, tempAudioPath, tempMergedPath);
+
+        await storage.updateProcessingJob(jobId, { progress: 95 });
+
+        const videoUploadURL = await objectStorageService.getObjectEntityUploadURL();
+        const videoStream = await fs.readFile(tempMergedPath);
+        const videoUploadResponse = await fetch(videoUploadURL, {
+          method: "PUT",
+          body: videoStream,
+          headers: {
+            "Content-Type": "video/mp4",
+          },
+        });
+
+        if (!videoUploadResponse.ok) {
+          throw new Error("Failed to upload merged video");
+        }
+
+        const videoUrlObj = new URL(videoUploadURL);
+        const videoPathParts = videoUrlObj.pathname.split("/");
+        const videoBucket = videoPathParts[1];
+        const videoObjectPath = videoPathParts.slice(2).join("/");
+        
+        if (videoBucket === privateDirBucket && videoObjectPath.startsWith(privateDirPath)) {
+          mergedVideoPath = `/objects/${videoObjectPath.replace(privateDirPath + "/", "")}`;
+        } else {
+          mergedVideoPath = `/objects/${videoObjectPath}`;
+        }
+
+        await fs.unlink(tempMergedPath).catch(() => {});
       }
 
       await storage.updateProcessingJob(jobId, {
         progress: 100,
         status: "completed",
         generatedAudioPath,
+        mergedVideoPath,
         metadata: {
           ...job.metadata,
           generatedAudioFormat: "mp3",
           generatedAudioDuration: job.metadata?.videoDuration,
+          hasMergedVideo: !!mergedVideoPath,
         },
       });
 

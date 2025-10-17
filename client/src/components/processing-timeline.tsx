@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, Loader2, XCircle, Upload, Music, FileText, Mic, Download } from "lucide-react";
+import { CheckCircle2, Circle, Loader2, XCircle, Upload, Music, FileText, Mic, Download, Edit, Video } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -22,8 +22,10 @@ const stepIcons: Record<string, any> = {
   upload: Upload,
   extract: Music,
   transcribe: FileText,
+  review: Edit,
   clone: Mic,
   generate: Music,
+  merge: Video,
   download: Download,
 };
 

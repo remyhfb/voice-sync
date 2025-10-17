@@ -80,4 +80,33 @@ export class FFmpegService {
         .run();
     });
   }
+
+  async mergeAudioVideo(
+    videoPath: string,
+    audioPath: string,
+    outputPath: string,
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      ffmpeg()
+        .input(videoPath)
+        .input(audioPath)
+        .outputOptions([
+          "-c:v",
+          "copy",
+          "-c:a",
+          "aac",
+          "-b:a",
+          "192k",
+          "-map",
+          "0:v:0",
+          "-map",
+          "1:a:0",
+          "-shortest",
+        ])
+        .output(outputPath)
+        .on("end", () => resolve())
+        .on("error", (err) => reject(new Error(`FFmpeg merge error: ${err.message}`)))
+        .run();
+    });
+  }
 }

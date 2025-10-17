@@ -1,4 +1,4 @@
-import { Download, FileAudio, FileText, FileJson } from "lucide-react";
+import { Download, FileAudio, FileText, FileJson, FileVideo } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ interface DownloadSectionProps {
   audioFormat?: string;
   audioDuration?: number;
   audioSize?: number;
+  videoUrl?: string;
   transcription?: string;
   metadata?: Record<string, any>;
 }
@@ -17,6 +18,7 @@ export function DownloadSection({
   audioFormat = "MP3",
   audioDuration,
   audioSize,
+  videoUrl,
   transcription,
   metadata,
 }: DownloadSectionProps) {
@@ -60,11 +62,40 @@ export function DownloadSection({
         <div className="space-y-1">
           <h3 className="text-lg font-semibold">Download Results</h3>
           <p className="text-sm text-muted-foreground">
-            Your AI-generated audio is ready
+            {videoUrl ? "Your video with cloned voice is ready" : "Your AI-generated audio is ready"}
           </p>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        {videoUrl && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 rounded-lg bg-primary/10 border-2 border-primary/20">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded bg-primary/20">
+                  <FileVideo className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="font-medium font-mono text-sm">final_video.mp4</p>
+                  <p className="text-xs text-muted-foreground mt-1">Video with cloned voice audio</p>
+                </div>
+              </div>
+              <Badge variant="default">MP4</Badge>
+            </div>
+
+            <Button
+              size="lg"
+              className="w-full"
+              asChild
+              data-testid="button-download-video"
+            >
+              <a href={videoUrl} download>
+                <Download className="h-5 w-5 mr-2" />
+                Download Final Video
+              </a>
+            </Button>
+          </div>
+        )}
+
         <div className="space-y-4">
           <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
             <div className="flex items-center gap-3">
@@ -85,6 +116,7 @@ export function DownloadSection({
           </div>
 
           <Button
+            variant={videoUrl ? "outline" : "default"}
             size="lg"
             className="w-full"
             disabled={!audioUrl}
@@ -94,12 +126,12 @@ export function DownloadSection({
             {audioUrl ? (
               <a href={audioUrl} download>
                 <Download className="h-5 w-5 mr-2" />
-                Download AI Audio
+                Download Audio Only
               </a>
             ) : (
               <>
                 <Download className="h-5 w-5 mr-2" />
-                Download AI Audio
+                Download Audio Only
               </>
             )}
           </Button>

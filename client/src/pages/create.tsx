@@ -369,6 +369,7 @@ export default function CreatePage() {
               audioFormat={currentJob.metadata?.generatedAudioFormat?.toUpperCase() || "MP3"}
               audioDuration={currentJob.metadata?.generatedAudioDuration}
               audioSize={0}
+              videoUrl={currentJob.mergedVideoPath}
               transcription={currentJob.transcription || undefined}
               metadata={currentJob.metadata || undefined}
             />
