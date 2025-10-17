@@ -146,8 +146,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const previewText = "Hello! This is a preview of your cloned voice. How does it sound?";
       
+      console.log(`[PREVIEW] Generating TTS for voice ${voice.elevenLabsVoiceId}`);
+      const startTime = Date.now();
+      
       const elevenlabs = new ElevenLabsService();
       const audioBuffer = await elevenlabs.textToSpeech(previewText, voice.elevenLabsVoiceId);
+      
+      const elapsed = Date.now() - startTime;
+      console.log(`[PREVIEW] ElevenLabs TTS completed in ${elapsed}ms, buffer size: ${audioBuffer.length} bytes`);
       
       res.set("Content-Type", "audio/mpeg");
       res.send(audioBuffer);
