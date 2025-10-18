@@ -413,12 +413,12 @@ export class FFmpegService {
       console.log(`[FFmpeg] Time-stretching video by ${ratio}x`);
       
       ffmpeg(inputPath)
+        .videoFilter(`setpts=${ratio}*PTS`)
+        .videoCodec("libx264")
         .outputOptions([
-          "-filter:v", `setpts=${ratio}*PTS`,
-          "-c:v", "libx264", // Must re-encode when using filters
-          "-preset", "fast", // Fast encoding
-          "-crf", "18", // High quality
-          "-an" // No audio in segments
+          "-preset", "fast",
+          "-crf", "18",
+          "-an"
         ])
         .output(outputPath)
         .on("end", () => {
