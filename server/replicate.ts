@@ -1,7 +1,7 @@
 import Replicate from "replicate";
 
-// Trainable version for creating custom RVC models
-const REPLICATE_RVC_TRAINING_MODEL = "replicate/train-rvc-model:cf360587a27f67500c30fc31de1e0f0f9aa26dcd7b866e6ac937a07bd104bad9";
+// Latest working version for RVC training (updated Oct 2025)
+const REPLICATE_RVC_TRAINING_MODEL = "replicate/train-rvc-model:0397d5e28c9b54665e1e5d29d5cf4f722a7b89ec20e9dbf31487235305b1a101";
 // Inference version for voice conversion
 const REPLICATE_RVC_INFERENCE_MODEL = "zsxkib/realistic-voice-cloning:56d0c89f960d4f2e291ace63531a5dc2ab2557c5a9c8c7bf5c85ef537e8b9117";
 
