@@ -97,10 +97,46 @@ export default function VoicesPage() {
   });
 
   const handlePlayVoice = async (voiceId: string) => {
-    toast({
-      title: "Voice Clone Ready",
-      description: "To test this voice, convert a video in the 'Create' tab. ElevenLabs Speech-to-Speech preserves perfect lip-sync timing!",
-    });
+    try {
+      // Stop any currently playing audio
+      audioElement.pause();
+      audioElement.currentTime = 0;
+
+      toast({
+        title: "Generating preview...",
+        description: "Creating a voice sample with ElevenLabs",
+      });
+
+      const response = await fetch(`/api/voices/${voiceId}/preview`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate preview");
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      
+      audioElement.src = audioUrl;
+      await audioElement.play();
+
+      toast({
+        title: "Playing preview",
+        description: "Listen to your cloned voice",
+      });
+
+      // Clean up the blob URL when audio finishes
+      audioElement.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+      };
+    } catch (error) {
+      toast({
+        title: "Preview failed",
+        description: "Could not generate voice preview. Try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleCreateVoice = () => {

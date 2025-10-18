@@ -171,6 +171,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/voices/:id/preview", async (req, res) => {
+    try {
+      if (!process.env.ELEVENLABS_API_KEY) {
+        return res.status(503).json({ 
+          error: "Voice preview not available. Please add your ElevenLabs API key." 
+        });
+      }
+
+      const voice = await storage.getVoiceClone(req.params.id);
+      if (!voice || voice.status !== "ready" || !voice.elevenLabsVoiceId) {
+        return res.status(400).json({ error: "Voice clone not ready" });
+      }
+
+      const elevenlabs = new ElevenLabsService();
+      const previewText = "Hello! This is a preview of your cloned voice. How does it sound?";
+      
+      const audioBuffer = await elevenlabs.textToSpeech(
+        previewText,
+        voice.elevenLabsVoiceId,
+        {
+          similarity_boost: 0.75,
+          stability: 0.5,
+          style: 0,
+        }
+      );
+
+      res.set({
+        'Content-Type': 'audio/mpeg',
+        'Content-Length': audioBuffer.length.toString(),
+      });
+      res.send(audioBuffer);
+    } catch (error: any) {
+      console.error("Error generating voice preview:", error);
+      res.status(500).json({ error: "Failed to generate preview" });
+    }
+  });
+
   app.delete("/api/voices/:id", async (req, res) => {
     try {
       const voice = await storage.getVoiceClone(req.params.id);
