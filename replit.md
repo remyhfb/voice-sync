@@ -186,6 +186,11 @@ VoiceSwap emphasizes processing transparency through visual feedback and real-ti
   - Superior detail preservation
   - 1.5-2x slower processing but highest quality output
   - Requires Scale plan or paid API credits
+  - **Temperature parameter**: 0.6 (default) for natural expressiveness
+    - Range: 0.3 (subtle lip movements) to 0.8 (highly expressive)
+    - 0.6 provides balanced, natural-looking speech for most use cases
+    - Higher values create more pronounced lip movements (good for dramatic content)
+    - Lower values create subtle movements (good for professional/corporate content)
 
 **Alternative Model:**
 - `lipsync-2`: Standard model (fallback option)

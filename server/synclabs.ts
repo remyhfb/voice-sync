@@ -30,6 +30,7 @@ export class SyncLabsService {
     audioUrl: string,
     options: {
       model?: "lipsync-2" | "lipsync-2-pro";
+      temperature?: number; // 0.3 (subtle) to 0.8 (expressive), default 0.6
       synergize?: boolean;
       webhookUrl?: string;
     } = {}
@@ -43,14 +44,15 @@ export class SyncLabsService {
 
     // Use lipsync-2-pro for best quality (requires Scale plan or paid credits)
     const model = options.model || "lipsync-2-pro";
+    const temperature = options.temperature ?? 0.6; // Slightly expressive for natural speech
     const synergize = options.synergize ?? true;
 
-    console.log(`[SyncLabs] Creating lip-sync job with model: ${model}`);
+    console.log(`[SyncLabs] Creating lip-sync job with model: ${model}, temperature: ${temperature}`);
     console.log(`[SyncLabs] Video: ${videoUrl}`);
     console.log(`[SyncLabs] Audio: ${audioUrl}`);
 
     // Step 1: Create job
-    const jobId = await this.createJob(videoUrl, audioUrl, model, synergize, options.webhookUrl);
+    const jobId = await this.createJob(videoUrl, audioUrl, model, temperature, synergize, options.webhookUrl);
     console.log(`[SyncLabs] Job created: ${jobId}`);
 
     // Step 2: Poll for completion
@@ -64,6 +66,7 @@ export class SyncLabsService {
     videoUrl: string,
     audioUrl: string,
     model: string,
+    temperature: number,
     synergize: boolean,
     webhookUrl?: string
   ): Promise<string> {
@@ -74,6 +77,10 @@ export class SyncLabsService {
           { type: "audio", url: audioUrl },
         ],
         model,
+        options: {
+          temperature,
+          synergize,
+        },
         ...(webhookUrl && { webhook: webhookUrl }),
       });
 
