@@ -110,13 +110,19 @@ export default function CreatePage() {
       {
         id: "extraction",
         label: "Audio Extraction",
-        status: job.progress >= 30 ? "completed" : job.status === "processing" ? "processing" : "pending",
+        status: job.progress >= 20 ? "completed" : job.status === "processing" ? "processing" : "pending",
+        estimatedTime: "~20 seconds",
+      },
+      {
+        id: "isolation",
+        label: "Vocal Isolation (Removing Background Music/SFX)",
+        status: job.progress >= 40 ? "completed" : job.progress >= 20 ? "processing" : "pending",
         estimatedTime: "~30 seconds",
       },
       {
         id: "conversion",
-        label: "Voice Conversion (RVC preserves timing perfectly)",
-        status: job.progress >= 80 ? "completed" : job.progress >= 30 ? "processing" : "pending",
+        label: "Voice Conversion (S2S preserves timing perfectly)",
+        status: job.progress >= 80 ? "completed" : job.progress >= 40 ? "processing" : "pending",
         estimatedTime: "~2 minutes",
       },
       {
