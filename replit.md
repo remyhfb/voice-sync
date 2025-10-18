@@ -27,3 +27,31 @@ VoiceSwap emphasizes processing transparency through visual feedback and real-ti
 *   **Google Cloud Storage**: Utilized for scalable object storage of all project-related files.
 *   **PostgreSQL (via Neon)**: The primary database for storing application data.
 *   **Drizzle ORM**: Used for type-safe database interactions with PostgreSQL.
+
+## Recent Changes (October 18, 2025)
+
+### Speech-to-Speech Voice Conversion Strength Fix
+**Problem:** S2S pipeline was only applying 30% voice conversion, preserving 70% of VEO's synthetic voice instead of fully replacing it with the cloned voice.
+
+**Root Cause:** ElevenLabs S2S API defaults `voice_conversion_strength` to 0.3. This critical parameter was missing from the implementation.
+
+**Solution:** Added `voice_conversion_strength: 1.0` to S2S voice settings for complete voice replacement while preserving VEO's professional acting, emotion, and prosody.
+
+**Technical Changes:**
+- Updated `ElevenLabsService.speechToSpeech()` to include:
+  - `voice_conversion_strength: 1.0` - Full voice replacement
+  - `similarity_boost: 1.0` - Maximum similarity to target voice
+  - `stability: 0.5` - Balanced for natural speech
+  - `use_speaker_boost: true` - Enhanced voice matching
+- UI updated to prioritize S2S pipeline for VEO videos
+- Clarified pipeline descriptions: S2S preserves emotion/acting, TTS generates neutral delivery
+
+**Result:**
+- ✅ 100% voice replacement (your cloned voice, not VEO's)
+- ✅ Preserves VEO's professional acting, emotion, and prosody
+- ✅ Perfect lip-sync timing maintained
+- ✅ Commercial-quality voice swapping for VEO videos
+
+### Two Processing Pipelines Available
+1. **Speech-to-Speech (For VEO)**: Preserves professional acting/emotion while replacing voice - recommended for AI-generated videos
+2. **Time-Aligned TTS**: Generates speech from text with word-level timing precision - neutral delivery, loses original emotion

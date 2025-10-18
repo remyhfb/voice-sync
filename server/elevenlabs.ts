@@ -124,12 +124,13 @@ export class ElevenLabsService {
       throw new Error("ElevenLabs API key not configured");
     }
 
-    // Optimized voice settings for MAXIMUM voice transformation (not preservation)
+    // Optimized voice settings for MAXIMUM voice transformation while preserving prosody/emotion
     const voiceSettings = {
-      stability: 0.5,              // Lower = more transformation, less source preservation
-      similarity_boost: 1.0,       // Maximum = strongest match to target voice (full replacement)
-      style: 0,                    // No AI interpretation
-      use_speaker_boost: true,     // Enhances similarity (slight latency cost)
+      stability: 0.5,                      // Balanced stability for natural speech
+      similarity_boost: 1.0,               // Maximum similarity to target voice
+      style: 0,                            // No AI interpretation (preserve source emotion)
+      use_speaker_boost: true,             // Enhances target voice similarity
+      voice_conversion_strength: 1.0,      // CRITICAL: Full voice replacement (default is 0.3!)
       ...options.voiceSettings,
     };
     

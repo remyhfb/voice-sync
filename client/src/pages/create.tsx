@@ -199,7 +199,7 @@ export default function CreatePage() {
             Create Voice Swap
           </h1>
           <p className="text-muted-foreground">
-            Upload your video and choose a voice clone. RVC technology preserves perfect lip-sync!
+            Upload your VEO video and swap the voice while keeping the professional acting & emotion
           </p>
         </div>
 
@@ -263,24 +263,6 @@ export default function CreatePage() {
             <div className="space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <button
-                  data-testid="button-pipeline-bark"
-                  onClick={() => setPipeline("bark")}
-                  className={`p-4 rounded-lg border-2 transition-all text-left ${
-                    pipeline === "bark"
-                      ? "border-primary bg-primary/10"
-                      : "border-border hover-elevate"
-                  }`}
-                >
-                  <div className="font-semibold mb-1">🎯 Time-Aligned TTS (Recommended)</div>
-                  <div className="text-sm text-muted-foreground">
-                    Word-level timestamps → Time-stretched TTS → Perfect lip-sync
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-2">
-                    Complete voice replacement + preserved timing
-                  </div>
-                </button>
-                
-                <button
                   data-testid="button-pipeline-s2s"
                   onClick={() => setPipeline("s2s")}
                   className={`p-4 rounded-lg border-2 transition-all text-left ${
@@ -289,12 +271,30 @@ export default function CreatePage() {
                       : "border-border hover-elevate"
                   }`}
                 >
-                  <div className="font-semibold mb-1">⚡ Two-Stage S2S</div>
+                  <div className="font-semibold mb-1">⚡ Speech-to-Speech (For VEO)</div>
                   <div className="text-sm text-muted-foreground">
-                    Normalize voice → Convert to clone
+                    Preserves emotion & acting, replaces voice quality
+                  </div>
+                  <div className="text-xs text-green-500 mt-2 font-medium">
+                    ✓ Keeps VEO's professional delivery with your voice
+                  </div>
+                </button>
+                
+                <button
+                  data-testid="button-pipeline-bark"
+                  onClick={() => setPipeline("bark")}
+                  className={`p-4 rounded-lg border-2 transition-all text-left ${
+                    pipeline === "bark"
+                      ? "border-primary bg-primary/10"
+                      : "border-border hover-elevate"
+                  }`}
+                >
+                  <div className="font-semibold mb-1">🎯 Time-Aligned TTS</div>
+                  <div className="text-sm text-muted-foreground">
+                    Word-level timestamps → Time-stretched TTS
                   </div>
                   <div className="text-xs text-muted-foreground mt-2">
-                    Works well for real human voices
+                    ⚠️ Neutral delivery - loses original emotion/acting
                   </div>
                 </button>
               </div>
