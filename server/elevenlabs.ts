@@ -125,11 +125,11 @@ export class ElevenLabsService {
         filename: "input.mp3",
         contentType: "audio/mpeg",
       });
-      formData.append("model_id", options.modelId || "eleven_english_sts_v2");
+      // Use eleven_multilingual_sts_v2 for best quality (outperforms English-only model)
+      formData.append("model_id", options.modelId || "eleven_multilingual_sts_v2");
       
-      if (options.removeBackgroundNoise !== undefined) {
-        formData.append("remove_background_noise", options.removeBackgroundNoise.toString());
-      }
+      // Enable background noise removal for cleaner output
+      formData.append("remove_background_noise", (options.removeBackgroundNoise !== false).toString());
 
       formData.submit(
         {
