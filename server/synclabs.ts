@@ -69,16 +69,17 @@ export class SyncLabsService {
   ): Promise<string> {
     return new Promise((resolve, reject) => {
       const payload = JSON.stringify({
-        videoUrl,
-        audioUrl,
+        inputs: [
+          { type: "video", url: videoUrl },
+          { type: "audio", url: audioUrl },
+        ],
         model,
-        synergize,
-        ...(webhookUrl && { webhookUrl }),
+        ...(webhookUrl && { webhook: webhookUrl }),
       });
 
       const options = {
         hostname: this.baseUrl,
-        path: "/video",
+        path: "/generate",
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -159,7 +160,7 @@ export class SyncLabsService {
     return new Promise((resolve, reject) => {
       const options = {
         hostname: this.baseUrl,
-        path: `/video/${jobId}`,
+        path: `/generate/${jobId}`,
         method: "GET",
         headers: {
           "x-api-key": this.apiKey,
@@ -176,7 +177,16 @@ export class SyncLabsService {
           if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
             try {
               const data = JSON.parse(body);
-              resolve(data);
+              // Normalize response format
+              const normalized = {
+                id: data.id,
+                status: (data.status || "").toLowerCase() as "processing" | "completed" | "failed",
+                videoUrl: data.output_url || data.videoUrl,
+                errorMessage: data.error || data.errorMessage,
+                creditsDeducted: data.credits_deducted || data.creditsDeducted,
+                step: data.step,
+              };
+              resolve(normalized);
             } catch (err) {
               reject(new Error(`Failed to parse response: ${body}`));
             }

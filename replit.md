@@ -58,8 +58,8 @@ VoiceSwap emphasizes processing transparency through visual feedback and real-ti
 
 **API Details:**
 - Base URL: `https://api.sync.so`
-- Create job: `POST /video` with JSON payload `{videoUrl, audioUrl, model, synergize}`
-- Check status: `GET /video/{jobId}` returns `{status, videoUrl, creditsDeducted, step}`
+- Create job: `POST /generate` with JSON payload `{inputs: [{type: "video", url}, {type: "audio", url}], model}`
+- Check status: `GET /generate/{jobId}` returns `{status, output_url, credits_deducted}`
 - Authentication: `x-api-key` header
 - Model: `lipsync-2-pro` (premium model, ~$4-5/min)
 
@@ -68,8 +68,6 @@ VoiceSwap emphasizes processing transparency through visual feedback and real-ti
 - `ObjectStorageService.getSignedReadURL()` generates time-limited download URLs
 - Pipeline stores `syncLabsCredits` in job metadata for cost transparency
 - Enhanced error messages and progress visibility
-
-**Production Ready:** ✅ Architect approved - secure, robust, production-ready implementation.
 
 ### Automatic Silence Trimming
 **Problem:** Users always upload audio with silence padding at start/end. For example: 8-second video + 11-second audio (same content, but 2s silence at start, 1s at end).
