@@ -173,17 +173,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/voices/:id/preview", async (req, res) => {
     try {
+      console.log(`[PREVIEW] Starting preview for voice: ${req.params.id}`);
+      
       if (!process.env.ELEVENLABS_API_KEY) {
+        console.log("[PREVIEW] API key not configured");
         return res.status(503).json({ 
           error: "Voice preview not available. Please add your ElevenLabs API key." 
         });
       }
 
       const voice = await storage.getVoiceClone(req.params.id);
+      console.log(`[PREVIEW] Voice found:`, voice ? `${voice.name} (${voice.status})` : 'NOT FOUND');
+      
       if (!voice || voice.status !== "ready" || !voice.elevenLabsVoiceId) {
+        console.log("[PREVIEW] Voice not ready or missing voice ID");
         return res.status(400).json({ error: "Voice clone not ready" });
       }
 
+      console.log(`[PREVIEW] Calling ElevenLabs TTS with voice ID: ${voice.elevenLabsVoiceId}`);
       const elevenlabs = new ElevenLabsService();
       const previewText = "Hello! This is a preview of your cloned voice. How does it sound?";
       
@@ -197,13 +204,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       );
 
+      console.log(`[PREVIEW] TTS completed, audio buffer size: ${audioBuffer.length} bytes`);
+      
       res.set({
         'Content-Type': 'audio/mpeg',
         'Content-Length': audioBuffer.length.toString(),
       });
       res.send(audioBuffer);
     } catch (error: any) {
-      console.error("Error generating voice preview:", error);
+      console.error("[PREVIEW] Error generating voice preview:", error);
+      console.error("[PREVIEW] Error stack:", error.stack);
       res.status(500).json({ error: "Failed to generate preview" });
     }
   });
