@@ -297,6 +297,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Step 2: Speech-to-Speech conversion with ElevenLabs (30-80%)
           console.log(`[JOB ${job.id}] Converting voice with ElevenLabs S2S`);
+          console.log(`[JOB ${job.id}] Voice ID: ${voice.elevenLabsVoiceId}`);
+          console.log(`[JOB ${job.id}] Voice name: ${voice.name}`);
+          console.log(`[JOB ${job.id}] Extracted audio path: ${extractedAudioPath}`);
+          
+          // Check extracted audio file
+          const audioStats = await fs.stat(extractedAudioPath);
+          console.log(`[JOB ${job.id}] Extracted audio size: ${audioStats.size} bytes`);
+          
           await storage.updateProcessingJob(job.id, { progress: 40 });
 
           const elevenlabs = new ElevenLabsService();
@@ -305,6 +313,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             extractedAudioPath,
             { removeBackgroundNoise: true }
           );
+          
+          console.log(`[JOB ${job.id}] S2S conversion completed, output size: ${convertedBuffer.length} bytes`);
 
           await fs.writeFile(convertedAudioPath, convertedBuffer);
 
