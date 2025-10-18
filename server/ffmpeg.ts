@@ -22,7 +22,7 @@ export class FFmpegService {
           "-acodec", "copy"   // Copy original audio stream
         ])
         .output(outputPath)
-        .on("codecData", (data) => {
+        .on("codecData", (data: any) => {
           const durationStr = data.duration;
           const parts = durationStr.split(":");
           duration =
@@ -36,7 +36,7 @@ export class FFmpegService {
             format: "mp3",
           });
         })
-        .on("error", (err) => {
+        .on("error", (err: any) => {
           reject(new Error(`FFmpeg error: ${err.message}`));
         })
         .run();
@@ -51,7 +51,7 @@ export class FFmpegService {
     const stats = await fs.stat(videoPath);
 
     return new Promise((resolve, reject) => {
-      ffmpeg.ffprobe(videoPath, (err, metadata) => {
+      ffmpeg.ffprobe(videoPath, (err: any, metadata: any) => {
         if (err) {
           reject(new Error(`FFprobe error: ${err.message}`));
           return;
@@ -82,7 +82,7 @@ export class FFmpegService {
 
       command
         .on("end", () => resolve())
-        .on("error", (err) => reject(new Error(`FFmpeg error: ${err.message}`)))
+        .on("error", (err: any) => reject(new Error(`FFmpeg error: ${err.message}`)))
         .run();
     });
   }
@@ -97,7 +97,7 @@ export class FFmpegService {
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       // First get the current duration
-      ffmpeg.ffprobe(inputPath, (err, metadata) => {
+      ffmpeg.ffprobe(inputPath, (err: any, metadata: any) => {
         if (err) {
           reject(new Error(`FFprobe error: ${err.message}`));
           return;
@@ -133,14 +133,46 @@ export class FFmpegService {
           .audioFilters(atempoFilters.join(','))
           .output(outputPath)
           .on("end", () => resolve())
-          .on("error", (err) => reject(new Error(`FFmpeg time-stretch error: ${err.message}`)))
+          .on("error", (err: any) => reject(new Error(`FFmpeg time-stretch error: ${err.message}`)))
           .run();
       });
     });
   }
 
   /**
-   * Concatenate multiple audio files
+   * Generate a silent audio file of specified duration with consistent codec parameters
+   */
+  async generateSilence(
+    outputPath: string,
+    duration: number
+  ): Promise<void> {
+    if (duration <= 0) {
+      throw new Error("Duration must be positive");
+    }
+
+    return new Promise((resolve, reject) => {
+      ffmpeg()
+        .input(`anullsrc=r=48000:cl=stereo`)  // 48kHz stereo to match concat target
+        .inputOptions(['-f', 'lavfi'])
+        .outputOptions([
+          '-t', duration.toString(),
+          '-acodec', 'libmp3lame',
+          '-ar', '48000',       // Match concat sample rate
+          '-ac', '2',           // Match concat channels (stereo)
+          '-ab', '192k'         // Match concat bitrate
+        ])
+        .output(outputPath)
+        .on("end", () => {
+          console.log(`[FFmpeg] Generated ${duration}s of silence: ${outputPath}`);
+          resolve();
+        })
+        .on("error", (err: any) => reject(new Error(`FFmpeg silence generation error: ${err.message}`)))
+        .run();
+    });
+  }
+
+  /**
+   * Concatenate multiple audio files with re-encoding to ensure consistent codec
    */
   async concatenateAudio(
     inputPaths: string[],
@@ -159,13 +191,19 @@ export class FFmpegService {
       ffmpeg()
         .input(concatListPath)
         .inputOptions(['-f', 'concat', '-safe', '0'])
-        .outputOptions(['-c', 'copy'])
+        // Re-encode to consistent format instead of stream copy to avoid codec mismatch
+        .outputOptions([
+          '-acodec', 'libmp3lame',
+          '-ar', '48000',       // 48kHz sample rate (standard for web)
+          '-ac', '2',           // Stereo
+          '-ab', '192k'         // 192kbps bitrate
+        ])
         .output(outputPath)
         .on("end", async () => {
           await fs.unlink(concatListPath).catch(() => {});
           resolve();
         })
-        .on("error", async (err) => {
+        .on("error", async (err: any) => {
           await fs.unlink(concatListPath).catch(() => {});
           reject(new Error(`FFmpeg concat error: ${err.message}`));
         })
@@ -197,7 +235,7 @@ export class FFmpegService {
         ])
         .output(outputPath)
         .on("end", () => resolve())
-        .on("error", (err) => reject(new Error(`FFmpeg merge error: ${err.message}`)))
+        .on("error", (err: any) => reject(new Error(`FFmpeg merge error: ${err.message}`)))
         .run();
     });
   }

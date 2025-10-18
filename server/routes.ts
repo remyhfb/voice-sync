@@ -449,7 +449,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       (async () => {
         const extractedAudioPath = `/tmp/uploads/${job.id}_extracted.m4a`;
         const isolatedAudioPath = `/tmp/uploads/${job.id}_isolated.mp3`;
-        const barkAudioPath = `/tmp/uploads/${job.id}_bark.wav`;
         const convertedAudioPath = `/tmp/uploads/${job.id}_converted.mp3`;
         const mergedVideoPath = `/tmp/uploads/${job.id}_final.mp4`;
         
@@ -476,15 +475,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`[JOB ${job.id}] [TIME-ALIGNED] Found ${transcriptData.segments.length} segments`);
           await storage.updateProcessingJob(job.id, { progress: 35 });
 
-          // Step 4: Generate time-aligned TTS for each segment (35-75%)
-          console.log(`[JOB ${job.id}] [TIME-ALIGNED] Generating time-aligned TTS segments`);
-          const segmentPaths: string[] = [];
+          // Step 4: Generate time-aligned TTS with silence padding (35-75%)
+          console.log(`[JOB ${job.id}] [TIME-ALIGNED] Generating time-aligned TTS segments with silence padding`);
+          const audioParts: string[] = [];
+          const silenceFiles: string[] = [];  // Track silence files for cleanup
+          
+          // Handle edge case: no speech detected
+          if (transcriptData.segments.length === 0) {
+            console.log(`[JOB ${job.id}] [TIME-ALIGNED] No speech detected, generating full-duration silence`);
+            const fullSilencePath = `/tmp/uploads/${job.id}_silence_full.mp3`;
+            await ffmpegService.generateSilence(fullSilencePath, videoMetadata.duration);
+            audioParts.push(fullSilencePath);
+            silenceFiles.push(fullSilencePath);
+            await storage.updateProcessingJob(job.id, { progress: 75 });
+          } else {
+            // Add silence before first segment (if speech doesn't start at 0s)
+            if (transcriptData.segments[0].start > 0.05) {
+              const startSilenceDuration = transcriptData.segments[0].start;
+              const startSilencePath = `/tmp/uploads/${job.id}_silence_start.mp3`;
+              console.log(`[JOB ${job.id}] [TIME-ALIGNED] Adding ${startSilenceDuration.toFixed(2)}s silence at start`);
+              await ffmpegService.generateSilence(startSilencePath, startSilenceDuration);
+              audioParts.push(startSilencePath);
+              silenceFiles.push(startSilencePath);
+            }
           
           for (let i = 0; i < transcriptData.segments.length; i++) {
             const segment = transcriptData.segments[i];
             const segmentDuration = segment.end - segment.start;
             
-            console.log(`[JOB ${job.id}] [TIME-ALIGNED] Segment ${i+1}/${transcriptData.segments.length}: "${segment.text.substring(0, 50)}..." (${segmentDuration.toFixed(2)}s)`);
+            console.log(`[JOB ${job.id}] [TIME-ALIGNED] Segment ${i+1}/${transcriptData.segments.length}: "${segment.text.substring(0, 50)}..." (${segmentDuration.toFixed(2)}s at ${segment.start.toFixed(2)}s)`);
             
             // Generate TTS for this segment using ElevenLabs
             const segmentTTSPath = `/tmp/uploads/${job.id}_segment_${i}_tts.mp3`;
@@ -502,7 +521,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
               segmentDuration
             );
             
-            segmentPaths.push(segmentAlignedPath);
+            audioParts.push(segmentAlignedPath);
+            
+            // Add silence between segments if there's a gap
+            if (i < transcriptData.segments.length - 1) {
+              const nextSegment = transcriptData.segments[i + 1];
+              const gapDuration = nextSegment.start - segment.end;
+              
+              if (gapDuration > 0.05) {  // Only add gap if > 50ms
+                const gapSilencePath = `/tmp/uploads/${job.id}_silence_gap_${i}.mp3`;
+                console.log(`[JOB ${job.id}] [TIME-ALIGNED] Adding ${gapDuration.toFixed(2)}s silence gap after segment ${i+1}`);
+                await ffmpegService.generateSilence(gapSilencePath, gapDuration);
+                audioParts.push(gapSilencePath);
+                silenceFiles.push(gapSilencePath);
+              }
+            }
             
             // Update progress
             const segmentProgress = 35 + ((i + 1) / transcriptData.segments.length) * 40;
@@ -511,22 +544,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Cleanup TTS temp file
             await fs.unlink(segmentTTSPath).catch(() => {});
           }
+            
+            // Add silence after last segment to match video duration
+            const lastSegment = transcriptData.segments[transcriptData.segments.length - 1];
+            const endSilenceDuration = videoMetadata.duration - lastSegment.end;
+            
+            if (endSilenceDuration > 0.05) {  // Only add if > 50ms
+              const endSilencePath = `/tmp/uploads/${job.id}_silence_end.mp3`;
+              console.log(`[JOB ${job.id}] [TIME-ALIGNED] Adding ${endSilenceDuration.toFixed(2)}s silence at end (video: ${videoMetadata.duration}s, speech ends: ${lastSegment.end.toFixed(2)}s)`);
+              await ffmpegService.generateSilence(endSilencePath, endSilenceDuration);
+              audioParts.push(endSilencePath);
+              silenceFiles.push(endSilencePath);
+            }
+          }
           
-          console.log(`[JOB ${job.id}] [TIME-ALIGNED] Concatenating ${segmentPaths.length} time-aligned segments`);
+          console.log(`[JOB ${job.id}] [TIME-ALIGNED] Concatenating ${audioParts.length} audio parts (speech + silence)`);
           await storage.updateProcessingJob(job.id, { progress: 75 });
 
-          // Step 5: Concatenate all time-aligned segments (75-85%)
-          await ffmpegService.concatenateAudio(segmentPaths, convertedAudioPath);
-          console.log(`[JOB ${job.id}] [TIME-ALIGNED] Final time-aligned audio created`);
+          // Step 5: Concatenate all audio parts with silence padding (75-85%)
+          await ffmpegService.concatenateAudio(audioParts, convertedAudioPath);
+          console.log(`[JOB ${job.id}] [TIME-ALIGNED] Final time-aligned audio created with silence padding`);
           
           await storage.updateProcessingJob(job.id, {
             convertedAudioPath,
             progress: 85,
           });
           
-          // Cleanup segment temp files
-          for (const segmentPath of segmentPaths) {
-            await fs.unlink(segmentPath).catch(() => {});
+          // Cleanup all temp files (segments + silence files)
+          for (const audioPartPath of audioParts) {
+            await fs.unlink(audioPartPath).catch(() => {});
+          }
+          for (const silencePath of silenceFiles) {
+            await fs.unlink(silencePath).catch(() => {});
           }
 
           // Step 6: Merge audio with video (85-100%)
@@ -585,7 +634,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await fs.unlink(videoFile.path).catch(() => {});
           await fs.unlink(extractedAudioPath).catch(() => {});
           await fs.unlink(isolatedAudioPath).catch(() => {});
-          await fs.unlink(barkAudioPath).catch(() => {});
           await fs.unlink(convertedAudioPath).catch(() => {});
           await fs.unlink(mergedVideoPath).catch(() => {});
         }
