@@ -124,6 +124,22 @@ export class ObjectStorageService {
     });
   }
 
+  async getSignedReadURL(uploadUrl: string, ttlSec: number = 3600): Promise<string> {
+    // Extract bucket and object name from upload URL
+    const urlObj = new URL(uploadUrl);
+    const pathParts = urlObj.pathname.split("/");
+    const bucketName = pathParts[1];
+    const objectName = pathParts.slice(2).join("/");
+
+    // Generate signed GET URL for reading
+    return this.signObjectURL({
+      bucketName,
+      objectName,
+      method: "GET",
+      ttlSec, // Default 1 hour
+    });
+  }
+
   private async signObjectURL({
     bucketName,
     objectName,

@@ -1,8 +1,8 @@
-import FormData from "form-data";
-import fs from "fs";
+import https from "https";
 
 export class SyncLabsService {
   private apiKey: string;
+  private baseUrl = "api.sync.so";
 
   constructor() {
     this.apiKey = process.env.SYNCLABS_API_KEY || "";
@@ -10,7 +10,7 @@ export class SyncLabsService {
 
   /**
    * Apply lip-sync to video using Sync Labs API
-   * Takes video + audio and generates perfectly synced output
+   * Uses job-based async API: POST /video with URLs, poll GET /video/{id}
    * 
    * Models:
    * - lipsync-2: Standard model ($0.04-$0.05/sec, ~$2.40-$3/min)
@@ -19,80 +19,175 @@ export class SyncLabsService {
    *   - Improved teeth generation
    *   - Superior detail preservation
    *   - Requires Scale plan or higher
+   * 
+   * @param videoUrl - Publicly accessible URL to video file
+   * @param audioUrl - Publicly accessible URL to audio file
+   * @param options - Configuration options
+   * @returns URL to the generated lip-synced video
    */
   async lipSync(
-    videoPath: string,
-    audioPath: string,
+    videoUrl: string,
+    audioUrl: string,
     options: {
       model?: "lipsync-2" | "lipsync-2-pro";
+      synergize?: boolean;
+      webhookUrl?: string;
     } = {}
-  ): Promise<Buffer> {
+  ): Promise<{
+    videoUrl: string;
+    creditsDeducted: number;
+  }> {
     if (!this.apiKey) {
       throw new Error("Sync Labs API key not configured");
     }
 
     // Use lipsync-2-pro for best quality (requires Scale plan or paid credits)
     const model = options.model || "lipsync-2-pro";
+    const synergize = options.synergize ?? true;
 
-    console.log(`[SyncLabs] Starting lip-sync with model: ${model}`);
-    console.log(`[SyncLabs] Video: ${videoPath}, Audio: ${audioPath}`);
+    console.log(`[SyncLabs] Creating lip-sync job with model: ${model}`);
+    console.log(`[SyncLabs] Video: ${videoUrl}`);
+    console.log(`[SyncLabs] Audio: ${audioUrl}`);
 
+    // Step 1: Create job
+    const jobId = await this.createJob(videoUrl, audioUrl, model, synergize, options.webhookUrl);
+    console.log(`[SyncLabs] Job created: ${jobId}`);
+
+    // Step 2: Poll for completion
+    const result = await this.pollJob(jobId);
+    console.log(`[SyncLabs] Lip-sync completed: ${result.videoUrl}`);
+
+    return result;
+  }
+
+  private createJob(
+    videoUrl: string,
+    audioUrl: string,
+    model: string,
+    synergize: boolean,
+    webhookUrl?: string
+  ): Promise<string> {
     return new Promise((resolve, reject) => {
-      const formData = new FormData();
-      
-      formData.append("video", fs.createReadStream(videoPath), {
-        filename: "video.mp4",
-        contentType: "video/mp4",
+      const payload = JSON.stringify({
+        videoUrl,
+        audioUrl,
+        model,
+        synergize,
+        ...(webhookUrl && { webhookUrl }),
       });
-      
-      formData.append("audio", fs.createReadStream(audioPath), {
-        filename: "audio.mp3",
-        contentType: "audio/mpeg",
-      });
-      
-      formData.append("model", model);
 
-      formData.submit(
-        {
-          protocol: "https:",
-          host: "api.sync.so",  // Correct: api.sync.so (not synclabs)
-          path: "/lipsync",
-          method: "POST",
-          headers: {
-            "x-api-key": this.apiKey,
-          },
+      const options = {
+        hostname: this.baseUrl,
+        path: "/video",
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(payload),
+          "x-api-key": this.apiKey,
         },
-        (err, response) => {
-          if (err) {
-            return reject(new Error(`Sync Labs API error: ${err.message}`));
-          }
+      };
 
-          const chunks: Buffer[] = [];
-          response.on("data", (chunk) => {
-            chunks.push(chunk);
-          });
+      const req = https.request(options, (res) => {
+        const chunks: Buffer[] = [];
 
-          response.on("end", () => {
-            console.log(`[SyncLabs] Response status: ${response.statusCode}`);
-            
-            if (response.statusCode && response.statusCode >= 200 && response.statusCode < 300) {
-              const videoBuffer = Buffer.concat(chunks);
-              console.log(`[SyncLabs] Lip-sync completed: ${videoBuffer.length} bytes`);
-              resolve(videoBuffer);
-            } else {
-              const errorText = Buffer.concat(chunks).toString();
-              console.error(`[SyncLabs] Error response:`, errorText);
-              reject(
-                new Error(`Sync Labs API error: ${response.statusCode} - ${errorText}`)
-              );
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("end", () => {
+          const body = Buffer.concat(chunks).toString();
+
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            try {
+              const data = JSON.parse(body);
+              resolve(data.id);
+            } catch (err) {
+              reject(new Error(`Failed to parse response: ${body}`));
             }
-          });
+          } else {
+            reject(new Error(`Sync Labs API error: ${res.statusCode} - ${body}`));
+          }
+        });
+      });
 
-          response.on("error", (error) => {
-            reject(new Error(`Sync Labs API error: ${error.message}`));
-          });
+      req.on("error", (err) => reject(new Error(`Request failed: ${err.message}`)));
+      req.write(payload);
+      req.end();
+    });
+  }
+
+  private async pollJob(jobId: string, maxAttempts = 120, intervalMs = 5000): Promise<{
+    videoUrl: string;
+    creditsDeducted: number;
+  }> {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const status = await this.getJobStatus(jobId);
+
+      const stepInfo = status.step ? ` (${status.step})` : '';
+      console.log(`[SyncLabs] Job ${jobId} status: ${status.status}${stepInfo} (attempt ${attempt + 1}/${maxAttempts})`);
+
+      if (status.status === "completed") {
+        if (!status.videoUrl) {
+          throw new Error("Job completed but no video URL returned");
         }
-      );
+        const creditsUsed = status.creditsDeducted || 0;
+        console.log(`[SyncLabs] Job completed successfully. Credits used: ${creditsUsed}`);
+        return {
+          videoUrl: status.videoUrl,
+          creditsDeducted: creditsUsed,
+        };
+      }
+
+      if (status.status === "failed") {
+        const errorDetails = status.errorMessage || "Unknown error";
+        console.error(`[SyncLabs] Job failed: ${errorDetails}`);
+        throw new Error(`Sync Labs job failed: ${errorDetails}`);
+      }
+
+      // Wait before next poll
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+
+    throw new Error(`Sync Labs job polling timeout after ${(maxAttempts * intervalMs) / 1000 / 60} minutes`);
+  }
+
+  private getJobStatus(jobId: string): Promise<{
+    id: string;
+    status: "processing" | "completed" | "failed";
+    videoUrl?: string;
+    errorMessage?: string;
+    creditsDeducted?: number;
+    step?: string;
+  }> {
+    return new Promise((resolve, reject) => {
+      const options = {
+        hostname: this.baseUrl,
+        path: `/video/${jobId}`,
+        method: "GET",
+        headers: {
+          "x-api-key": this.apiKey,
+        },
+      };
+
+      const req = https.request(options, (res) => {
+        const chunks: Buffer[] = [];
+
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("end", () => {
+          const body = Buffer.concat(chunks).toString();
+
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            try {
+              const data = JSON.parse(body);
+              resolve(data);
+            } catch (err) {
+              reject(new Error(`Failed to parse response: ${body}`));
+            }
+          } else {
+            reject(new Error(`Sync Labs API error: ${res.statusCode} - ${body}`));
+          }
+        });
+      });
+
+      req.on("error", (err) => reject(new Error(`Request failed: ${err.message}`)));
+      req.end();
     });
   }
 }

@@ -30,7 +30,32 @@ VoiceSwap emphasizes processing transparency through visual feedback and real-ti
 
 ## Recent Changes (October 18, 2025)
 
-### Automatic Silence Trimming (Latest)
+### Sync Labs API Integration Fix (Latest)
+**Problem:** Initial implementation tried to POST multipart file uploads directly to `/lipsync` endpoint, which returned 404 errors.
+
+**Root Cause:** Sync Labs uses an async job-based API, not direct file uploads.
+
+**Solution:** Refactored to use correct Sync Labs API flow:
+1. Upload time-stretched video and cleaned audio to GCS
+2. POST JSON with public URLs to `https://api.sync.so/video`
+3. Poll `GET /video/{jobId}` for completion (5-second intervals, max 10 minutes)
+4. Download result from returned `videoUrl`
+
+**Implementation:**
+- `SyncLabsService.lipSync()` now accepts URLs instead of file paths
+- Added `createJob()`, `pollJob()`, and `getJobStatus()` private methods
+- Pipeline uploads files to GCS first, generates public URLs, then calls Sync Labs
+- Returns final video URL after job completes
+
+**API Details:**
+- Base URL: `https://api.sync.so`
+- Create job: `POST /video` with JSON payload `{videoUrl, audioUrl, model, synergize}`
+- Check status: `GET /video/{jobId}` returns `{status, videoUrl, creditsDeducted}`
+- Authentication: `x-api-key` header
+
+**User Benefit:** Sync Labs integration now works correctly with premium `lipsync-2-pro` model for highest quality lip-sync output.
+
+### Automatic Silence Trimming
 **Problem:** Users always upload audio with silence padding at start/end. For example: 8-second video + 11-second audio (same content, but 2s silence at start, 1s at end).
 
 **Solution:** Automatic silence detection and trimming before transcription/alignment:

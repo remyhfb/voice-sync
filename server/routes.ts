@@ -795,25 +795,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.updateProcessingJob(job.id, { progress: 70 });
 
           // Step 6: Apply Sync Labs lip-sync (70-90%)
+          console.log(`[JOB ${job.id}] [LIPSYNC] Uploading video and audio to GCS for Sync Labs`);
+          const objectStorageService = new ObjectStorageService();
+          
+          // Upload time-stretched video
+          const videoUploadUrl = await objectStorageService.getObjectEntityUploadURL();
+          const videoBuffer = await fs.readFile(timeStretchedVideoPath);
+          const videoStats = await fs.stat(timeStretchedVideoPath);
+          await fetch(videoUploadUrl, {
+            method: 'PUT',
+            body: videoBuffer,
+            headers: {
+              'Content-Type': 'video/mp4',
+              'Content-Length': videoStats.size.toString(),
+            },
+          });
+          // Generate signed GET URL (1 hour TTL) for Sync Labs to download
+          const videoReadUrl = await objectStorageService.getSignedReadURL(videoUploadUrl, 3600);
+          
+          // Upload cleaned audio
+          const audioUploadUrl = await objectStorageService.getObjectEntityUploadURL();
+          const audioBuffer = await fs.readFile(cleanedUserAudioPath);
+          const audioStats = await fs.stat(cleanedUserAudioPath);
+          await fetch(audioUploadUrl, {
+            method: 'PUT',
+            body: audioBuffer,
+            headers: {
+              'Content-Type': 'audio/mpeg',
+              'Content-Length': audioStats.size.toString(),
+            },
+          });
+          // Generate signed GET URL (1 hour TTL) for Sync Labs to download
+          const audioReadUrl = await objectStorageService.getSignedReadURL(audioUploadUrl, 3600);
+          
+          await storage.updateProcessingJob(job.id, { progress: 75 });
+          
           console.log(`[JOB ${job.id}] [LIPSYNC] Applying lip-sync with Sync Labs`);
           const synclabs = new SyncLabsService();
-          const lipsyncedBuffer = await synclabs.lipSync(
-            timeStretchedVideoPath,
-            cleanedUserAudioPath,
+          const syncLabsResult = await synclabs.lipSync(
+            videoReadUrl,
+            audioReadUrl,
             { model: "lipsync-2-pro" } // Using latest premium model for best quality
           );
           
+          console.log(`[JOB ${job.id}] [LIPSYNC] Sync Labs completed. Credits used: ${syncLabsResult.creditsDeducted}`);
+          console.log(`[JOB ${job.id}] [LIPSYNC] Downloading lip-synced video from ${syncLabsResult.videoUrl}`);
+          const lipsyncedResponse = await fetch(syncLabsResult.videoUrl);
+          if (!lipsyncedResponse.ok) {
+            throw new Error(`Failed to download lip-synced video: ${lipsyncedResponse.statusText}`);
+          }
+          const lipsyncedBuffer = Buffer.from(await lipsyncedResponse.arrayBuffer());
           await fs.writeFile(lipsyncedVideoPath, lipsyncedBuffer);
           await storage.updateProcessingJob(job.id, { progress: 90 });
 
           // Step 7: Upload final video (90-100%)
           console.log(`[JOB ${job.id}] [LIPSYNC] Uploading final video`);
-          const objectStorageService = new ObjectStorageService();
-          const videoUploadUrl = await objectStorageService.getObjectEntityUploadURL();
+          const finalVideoUploadUrl = await objectStorageService.getObjectEntityUploadURL();
           const finalBuffer = await fs.readFile(lipsyncedVideoPath);
           const finalStats = await fs.stat(lipsyncedVideoPath);
           
-          await fetch(videoUploadUrl, {
+          await fetch(finalVideoUploadUrl, {
             method: 'PUT',
             body: finalBuffer,
             headers: {
@@ -822,7 +863,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             },
           });
 
-          const urlParts = videoUploadUrl.split('?')[0].split('/');
+          const urlParts = finalVideoUploadUrl.split('?')[0].split('/');
           const objectId = urlParts[urlParts.length - 1];
           const finalVideoPath = `/objects/uploads/${objectId}`;
 
@@ -831,6 +872,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             mergedVideoPath: finalVideoPath,
             status: "completed",
             progress: 100,
+            metadata: {
+              ...job.metadata,
+              syncLabsCredits: syncLabsResult.creditsDeducted,
+            } as any, // metadata is JSONB, allows dynamic properties
           });
 
           console.log(`[JOB ${job.id}] [LIPSYNC] Processing completed successfully`);
