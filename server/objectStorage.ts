@@ -110,19 +110,57 @@ export class ObjectStorageService {
   async getObjectEntityUploadURL(): Promise<string> {
     const privateDir = this.getPrivateObjectDir();
     const objectId = randomUUID();
-    const fullPath = `${privateDir}/${objectId}`;
+    const fullPath = `${privateDir}/uploads/${objectId}`;
     const pathSegments = fullPath.split("/").filter(s => s); // Remove empty strings
-    const [bucket, ...pathParts] = pathSegments;
-    const objectPath = pathParts.join("/");
-    const file = objectStorageClient.bucket(bucket).file(objectPath);
+    const bucketName = pathSegments[0];
+    const objectName = pathSegments.slice(1).join("/");
 
-    const [url] = await file.getSignedUrl({
-      version: "v4",
-      action: "write",
-      expires: Date.now() + 15 * 60 * 1000,
+    // Use Replit sidecar endpoint to sign URL
+    return this.signObjectURL({
+      bucketName,
+      objectName,
+      method: "PUT",
+      ttlSec: 900, // 15 minutes
     });
+  }
 
-    return url;
+  private async signObjectURL({
+    bucketName,
+    objectName,
+    method,
+    ttlSec,
+  }: {
+    bucketName: string;
+    objectName: string;
+    method: "GET" | "PUT" | "DELETE" | "HEAD";
+    ttlSec: number;
+  }): Promise<string> {
+    const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
+    const request = {
+      bucket_name: bucketName,
+      object_name: objectName,
+      method,
+      expires_at: new Date(Date.now() + ttlSec * 1000).toISOString(),
+    };
+    const response = await fetch(
+      `${REPLIT_SIDECAR_ENDPOINT}/object-storage/signed-object-url`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(request),
+      }
+    );
+    if (!response.ok) {
+      throw new Error(
+        `Failed to sign object URL, errorcode: ${response.status}, ` +
+          `make sure you're running on Replit`
+      );
+    }
+
+    const { signed_url: signedURL } = await response.json();
+    return signedURL;
   }
 
   async trySetObjectEntityAclPolicy(
