@@ -122,6 +122,37 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 18, 2025)
 
+### Speech-to-Speech Voice Conversion Fix (October 18, 2025)
+**Problem Solved:** S2S conversion preserved source accent instead of fully converting to cloned voice. British accent remained when converting to American voice clone.
+
+**Root Cause:** ElevenLabs defaults `voice_conversion_strength` to 0.3, which only mixes 30% of target voice with 70% of source, preserving original accent characteristics.
+
+**Solution:** Added voice_settings parameter to speechToSpeech() with optimal defaults:
+- `voice_conversion_strength: 1.0` - Full voice replacement (was defaulting to 0.3)
+- `similarity_boost: 0.75` - High similarity to cloned voice
+- `stability: 0.5` - Balanced stability for natural speech
+- All parameters configurable via options for fine-tuning
+
+**Technical Implementation:**
+- Updated `ElevenLabsService.speechToSpeech()` to accept voiceSettings option
+- FormData now includes voice_settings JSON with optimal conversion parameters
+- Maintains backward compatibility with existing calls
+
+### Dialog UI Fix (October 18, 2025)
+**Problem Solved:** "Create Voice Clone" button disappeared when uploading multiple audio files in the voice creation dialog.
+
+**Root Cause:** DialogContent was a single scrollable column, causing DialogFooter to scroll off-screen when FileUploadZone expanded with selected file cards.
+
+**Solution:** Restructured dialog layout using flex column architecture:
+- DialogContent: `flex flex-col` for vertical stacking
+- Form body: `flex-1 overflow-y-auto` for scrollable content area
+- DialogFooter: `flex-shrink-0` to pin at bottom (never scrolls)
+
+**Technical Implementation:**
+- Ensures action buttons remain accessible regardless of content height
+- Works across all screen sizes and viewport heights
+- Maintains proper spacing with `pr-2` for scrollbar clearance
+
 ### Database Persistence Implementation (October 18, 2025)
 **Problem Solved:** Application was using in-memory storage, causing data loss on server restarts and preventing production deployments.
 
