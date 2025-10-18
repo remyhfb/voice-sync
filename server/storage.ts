@@ -1,5 +1,7 @@
-import { type VoiceClone, type InsertVoiceClone, type ProcessingJob, type InsertProcessingJob } from "@shared/schema";
+import { type VoiceClone, type InsertVoiceClone, type ProcessingJob, type InsertProcessingJob, voiceClones, processingJobs } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 
 export interface IStorage {
   getVoiceClone(id: string): Promise<VoiceClone | undefined>;
@@ -94,4 +96,60 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export class DatabaseStorage implements IStorage {
+  async getVoiceClone(id: string): Promise<VoiceClone | undefined> {
+    const result = await db.select().from(voiceClones).where(eq(voiceClones.id, id));
+    return result[0];
+  }
+
+  async getAllVoiceClones(): Promise<VoiceClone[]> {
+    return db.select().from(voiceClones);
+  }
+
+  async createVoiceClone(insertVoiceClone: InsertVoiceClone): Promise<VoiceClone> {
+    const result = await db.insert(voiceClones).values([insertVoiceClone]).returning();
+    return result[0];
+  }
+
+  async updateVoiceClone(id: string, updates: Partial<VoiceClone>): Promise<VoiceClone | undefined> {
+    const result = await db.update(voiceClones)
+      .set(updates)
+      .where(eq(voiceClones.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteVoiceClone(id: string): Promise<boolean> {
+    const result = await db.delete(voiceClones).where(eq(voiceClones.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getProcessingJob(id: string): Promise<ProcessingJob | undefined> {
+    const result = await db.select().from(processingJobs).where(eq(processingJobs.id, id));
+    return result[0];
+  }
+
+  async getAllProcessingJobs(): Promise<ProcessingJob[]> {
+    return db.select().from(processingJobs);
+  }
+
+  async createProcessingJob(insertJob: InsertProcessingJob): Promise<ProcessingJob> {
+    const result = await db.insert(processingJobs).values([insertJob]).returning();
+    return result[0];
+  }
+
+  async updateProcessingJob(id: string, updates: Partial<ProcessingJob>): Promise<ProcessingJob | undefined> {
+    const result = await db.update(processingJobs)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(processingJobs.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteProcessingJob(id: string): Promise<boolean> {
+    const result = await db.delete(processingJobs).where(eq(processingJobs.id, id)).returning();
+    return result.length > 0;
+  }
+}
+
+export const storage = new DatabaseStorage();
