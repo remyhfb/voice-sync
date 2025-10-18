@@ -22,27 +22,23 @@ export class ReplicateService {
   ): Promise<{ modelUrl: string; trainingId: string }> {
     console.log(`[RVC] Starting voice model training for: ${modelName}`);
     
-    const training = await this.client.trainings.create(
-      "replicate",
-      "train-rvc-model",
-      REPLICATE_RVC_TRAINING_MODEL.split(":")[1],
-      {
-        destination: `${process.env.REPLICATE_USERNAME || "voiceswap"}/${modelName}`,
-        input: {
-          dataset_zip: datasetZipUrl,
-          sample_rate: "48k",
-          version: "v2",
-          f0method: "rmvpe_gpu",
-          epoch: 50,
-          batch_size: 7,
-        },
-      }
-    );
+    // train-rvc-model is a prediction model, not a training endpoint
+    const prediction = await this.client.predictions.create({
+      version: REPLICATE_RVC_TRAINING_MODEL.split(":")[1],
+      input: {
+        dataset_zip: datasetZipUrl,
+        sample_rate: "48k",
+        version: "v2",
+        f0method: "rmvpe_gpu",
+        epoch: 50,
+        batch_size: "7",
+      },
+    });
 
-    console.log(`[RVC] Training started: ${training.id}`);
+    console.log(`[RVC] Training prediction started: ${prediction.id}`);
     return {
-      trainingId: training.id,
-      modelUrl: training.urls?.get || "",
+      trainingId: prediction.id,
+      modelUrl: "",
     };
   }
 
@@ -52,13 +48,14 @@ export class ReplicateService {
     error?: string;
     logs?: string;
   }> {
-    const training = await this.client.trainings.get(trainingId);
+    const prediction = await this.client.predictions.get(trainingId);
     
     return {
-      status: training.status,
-      modelUrl: training.output?.model_url,
-      error: training.error?.toString(),
-      logs: training.logs,
+      status: prediction.status,
+      // Output is a URL to the trained model zip file
+      modelUrl: typeof prediction.output === 'string' ? prediction.output : undefined,
+      error: prediction.error?.toString(),
+      logs: prediction.logs,
     };
   }
 
