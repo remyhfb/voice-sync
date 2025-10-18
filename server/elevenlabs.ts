@@ -124,11 +124,12 @@ export class ElevenLabsService {
       throw new Error("ElevenLabs API key not configured");
     }
 
-    // Voice settings for full voice conversion (1.0 = complete voice replacement)
+    // Optimized voice settings for maximum similarity to cloned voice
     const voiceSettings = {
-      stability: 0.5,
-      similarity_boost: 0.75,
-      voice_conversion_strength: 1.0, // Full voice replacement (default 0.3 mixes voices)
+      stability: 0.7,              // Higher = more consistent with clone
+      similarity_boost: 0.95,      // Higher = closer match to clone voice
+      style: 0,                    // No AI interpretation, preserve source delivery
+      use_speaker_boost: true,     // Enhances similarity (slight latency cost)
       ...options.voiceSettings,
     };
     
