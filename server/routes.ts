@@ -696,15 +696,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const elevenlabs = new ElevenLabsService();
           const cleanedBuffer = await elevenlabs.isolateVoice(audioFile.path);
           await fs.writeFile(cleanedUserAudioPath, cleanedBuffer);
-          await storage.updateProcessingJob(job.id, { progress: 20 });
+          await storage.updateProcessingJob(job.id, { progress: 15 });
+
+          // Step 2.5: Trim silence from both audio files (15-20%)
+          console.log(`[JOB ${job.id}] [LIPSYNC] Trimming silence from audio files`);
+          const trimmedUserAudioPath = `/tmp/uploads/${job.id}_trimmed_user.mp3`;
+          const trimmedVeoAudioPath = `/tmp/uploads/${job.id}_trimmed_veo.mp3`;
+          
+          const [userTrimResult, veoTrimResult] = await Promise.all([
+            ffmpegService.trimSilence(cleanedUserAudioPath, trimmedUserAudioPath),
+            ffmpegService.trimSilence(veoAudioPath, trimmedVeoAudioPath)
+          ]);
+
+          console.log(`[JOB ${job.id}] [LIPSYNC] User audio trimmed: ${userTrimResult.startTrimmed.toFixed(2)}s start, ${userTrimResult.endTrimmed.toFixed(2)}s end`);
+          console.log(`[JOB ${job.id}] [LIPSYNC] VEO audio trimmed: ${veoTrimResult.startTrimmed.toFixed(2)}s start, ${veoTrimResult.endTrimmed.toFixed(2)}s end`);
+          
+          await storage.updateProcessingJob(job.id, { 
+            progress: 20,
+            metadata: {
+              ...job.metadata,
+              silenceTrimmed: {
+                user: userTrimResult,
+                veo: veoTrimResult
+              }
+            }
+          });
 
           // Step 3: Transcribe both with Whisper (20-40%)
-          console.log(`[JOB ${job.id}] [LIPSYNC] Transcribing VEO video and user audio`);
+          console.log(`[JOB ${job.id}] [LIPSYNC] Transcribing VEO video and user audio (trimmed versions)`);
           const aligner = new SegmentAligner();
           
           const [veoSegments, userSegments] = await Promise.all([
-            aligner.extractSegments(veoAudioPath),
-            aligner.extractSegments(cleanedUserAudioPath)
+            aligner.extractSegments(trimmedVeoAudioPath),
+            aligner.extractSegments(trimmedUserAudioPath)
           ]);
           
           console.log(`[JOB ${job.id}] [LIPSYNC] VEO segments: ${veoSegments.length}, User segments: ${userSegments.length}`);
@@ -831,6 +855,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await fs.unlink(audioFile.path).catch(() => {});
           await fs.unlink(veoAudioPath).catch(() => {});
           await fs.unlink(cleanedUserAudioPath).catch(() => {});
+          await fs.unlink(`/tmp/uploads/${job.id}_trimmed_user.mp3`).catch(() => {});
+          await fs.unlink(`/tmp/uploads/${job.id}_trimmed_veo.mp3`).catch(() => {});
           await fs.unlink(timeStretchedVideoPath).catch(() => {});
           await fs.unlink(lipsyncedVideoPath).catch(() => {});
           for (const segPath of segmentPaths) {

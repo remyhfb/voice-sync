@@ -241,6 +241,108 @@ export class FFmpegService {
   }
 
   /**
+   * Detect and trim silence from beginning and end of audio file
+   * Returns trimmed audio file and metadata about what was removed
+   */
+  async trimSilence(
+    inputPath: string,
+    outputPath: string,
+    options: {
+      noiseThreshold?: number;  // dB threshold for silence detection (-50dB default)
+      minSilenceDuration?: number;  // minimum silence duration in seconds (0.1s default)
+    } = {}
+  ): Promise<{
+    startTrimmed: number;  // seconds trimmed from start
+    endTrimmed: number;    // seconds trimmed from end
+    originalDuration: number;
+    trimmedDuration: number;
+  }> {
+    const noiseThreshold = options.noiseThreshold || -50;  // -50dB is good for speech
+    const minSilenceDuration = options.minSilenceDuration || 0.1;
+
+    return new Promise((resolve, reject) => {
+      // First, get original duration
+      ffmpeg.ffprobe(inputPath, (err: any, metadata: any) => {
+        if (err) {
+          reject(new Error(`FFprobe error: ${err.message}`));
+          return;
+        }
+
+        const originalDuration = metadata.format.duration || 0;
+
+        // Use silencedetect to find speech boundaries
+        let silenceData = '';
+        
+        ffmpeg(inputPath)
+          .audioFilters(`silencedetect=noise=${noiseThreshold}dB:d=${minSilenceDuration}`)
+          .outputOptions(['-f', 'null'])
+          .output('-')
+          .on('stderr', (stderrLine: string) => {
+            silenceData += stderrLine + '\n';
+          })
+          .on('end', () => {
+            // Parse silence detection output to find speech start/end
+            const silenceStartMatches = [...silenceData.matchAll(/silence_start: ([\d.]+)/g)];
+            const silenceEndMatches = [...silenceData.matchAll(/silence_end: ([\d.]+)/g)];
+
+            let speechStart = 0;
+            let speechEnd = originalDuration;
+
+            // If silence detected at the very beginning, speech starts after it ends
+            if (silenceStartMatches.length > 0 && parseFloat(silenceStartMatches[0][1]) < 0.5) {
+              if (silenceEndMatches.length > 0) {
+                speechStart = parseFloat(silenceEndMatches[0][1]);
+              }
+            }
+
+            // If silence detected at the very end, speech ends when it starts
+            if (silenceStartMatches.length > 0) {
+              const lastSilenceStart = parseFloat(silenceStartMatches[silenceStartMatches.length - 1][1]);
+              if (lastSilenceStart > originalDuration - 1.0) {  // Last 1 second
+                speechEnd = lastSilenceStart;
+              }
+            }
+
+            const startTrimmed = speechStart;
+            const endTrimmed = originalDuration - speechEnd;
+            const trimmedDuration = speechEnd - speechStart;
+
+            console.log(`[FFmpeg] Silence trim: ${startTrimmed.toFixed(2)}s from start, ${endTrimmed.toFixed(2)}s from end`);
+            console.log(`[FFmpeg] Duration: ${originalDuration.toFixed(2)}s → ${trimmedDuration.toFixed(2)}s`);
+
+            // Now trim the audio
+            ffmpeg(inputPath)
+              .setStartTime(speechStart)
+              .setDuration(trimmedDuration)
+              .outputOptions([
+                '-acodec', 'libmp3lame',
+                '-ar', '48000',
+                '-ac', '2',
+                '-ab', '192k'
+              ])
+              .output(outputPath)
+              .on('end', () => {
+                resolve({
+                  startTrimmed,
+                  endTrimmed,
+                  originalDuration,
+                  trimmedDuration
+                });
+              })
+              .on('error', (err: any) => {
+                reject(new Error(`FFmpeg trim error: ${err.message}`));
+              })
+              .run();
+          })
+          .on('error', (err: any) => {
+            reject(new Error(`FFmpeg silence detection error: ${err.message}`));
+          })
+          .run();
+      });
+    });
+  }
+
+  /**
    * Extract a video segment (no audio) by time range
    */
   async extractVideoSegment(
