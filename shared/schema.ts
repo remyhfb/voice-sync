@@ -66,6 +66,20 @@ export const processingJobs = pgTable("processing_jobs", {
         recommendation: string;
       }>;
     };
+    silenceTrimmed?: {
+      user: {
+        startTrimmed: number;
+        endTrimmed: number;
+        originalDuration: number;
+        trimmedDuration: number;
+      };
+      veo: {
+        startTrimmed: number;
+        endTrimmed: number;
+        originalDuration: number;
+        trimmedDuration: number;
+      };
+    };
     errorMessage?: string;
     errorStack?: string;
   }>(),

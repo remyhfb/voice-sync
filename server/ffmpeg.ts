@@ -282,23 +282,38 @@ export class FFmpegService {
           })
           .on('end', () => {
             // Parse silence detection output to find speech start/end
-            const silenceStartMatches = [...silenceData.matchAll(/silence_start: ([\d.]+)/g)];
-            const silenceEndMatches = [...silenceData.matchAll(/silence_end: ([\d.]+)/g)];
+            const silenceStartMatches = Array.from(silenceData.matchAll(/silence_start: ([\d.]+)/g));
+            const silenceEndMatches = Array.from(silenceData.matchAll(/silence_end: ([\d.]+)/g));
 
             let speechStart = 0;
             let speechEnd = originalDuration;
 
-            // If silence detected at the very beginning, speech starts after it ends
-            if (silenceStartMatches.length > 0 && parseFloat(silenceStartMatches[0][1]) < 0.5) {
-              if (silenceEndMatches.length > 0) {
+            // Find leading silence: if first silence_start is near beginning (within 0.5s),
+            // then speech starts when that silence ends
+            if (silenceStartMatches.length > 0 && silenceEndMatches.length > 0) {
+              const firstSilenceStart = parseFloat(silenceStartMatches[0][1]);
+              if (firstSilenceStart < 0.5) {
                 speechStart = parseFloat(silenceEndMatches[0][1]);
               }
             }
 
-            // If silence detected at the very end, speech ends when it starts
+            // Find trailing silence: if last silence_start exists and either:
+            // - has no matching silence_end (extends to EOF), OR
+            // - the matching silence_end is very close to EOF (within minSilenceDuration)
+            // then speech ends when that silence starts
             if (silenceStartMatches.length > 0) {
               const lastSilenceStart = parseFloat(silenceStartMatches[silenceStartMatches.length - 1][1]);
-              if (lastSilenceStart > originalDuration - 1.0) {  // Last 1 second
+              
+              // Check if this silence extends to (or very near) the end of file
+              const hasMatchingEnd = silenceEndMatches.length >= silenceStartMatches.length;
+              if (hasMatchingEnd) {
+                const lastSilenceEnd = parseFloat(silenceEndMatches[silenceEndMatches.length - 1][1]);
+                // If silence extends to near EOF, trim it
+                if (originalDuration - lastSilenceEnd < minSilenceDuration) {
+                  speechEnd = lastSilenceStart;
+                }
+              } else {
+                // No matching end means silence extends to EOF
                 speechEnd = lastSilenceStart;
               }
             }
@@ -309,6 +324,18 @@ export class FFmpegService {
 
             console.log(`[FFmpeg] Silence trim: ${startTrimmed.toFixed(2)}s from start, ${endTrimmed.toFixed(2)}s from end`);
             console.log(`[FFmpeg] Duration: ${originalDuration.toFixed(2)}s → ${trimmedDuration.toFixed(2)}s`);
+
+            // Guard against zero/negative duration (file is entirely/mostly silence)
+            if (trimmedDuration <= 0.1) {
+              console.log(`[FFmpeg] Warning: Trimmed duration too short (${trimmedDuration}s), returning original file`);
+              resolve({
+                startTrimmed: 0,
+                endTrimmed: 0,
+                originalDuration,
+                trimmedDuration: originalDuration
+              });
+              return;
+            }
 
             // Now trim the audio
             ffmpeg(inputPath)
