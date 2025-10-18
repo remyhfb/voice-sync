@@ -177,13 +177,14 @@ export class SyncLabsService {
           if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
             try {
               const data = JSON.parse(body);
+              console.log(`[SyncLabs] Raw API response:`, JSON.stringify(data, null, 2));
               // Normalize response format
               const normalized = {
                 id: data.id,
                 status: (data.status || "").toLowerCase() as "processing" | "completed" | "failed",
-                videoUrl: data.output_url || data.videoUrl,
+                videoUrl: data.outputUrl || data.output_url || data.videoUrl,
                 errorMessage: data.error || data.errorMessage,
-                creditsDeducted: data.credits_deducted || data.creditsDeducted,
+                creditsDeducted: data.creditsDeducted || data.credits_deducted,
                 step: data.step,
               };
               resolve(normalized);
