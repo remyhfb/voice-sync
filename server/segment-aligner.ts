@@ -364,16 +364,31 @@ export class SegmentAligner {
     const majorIssues = segments.filter(s => s.severity === "major").length;
     const minorIssues = segments.filter(s => s.severity === "minor").length;
 
-    // Determine overall quality
+    // Determine overall quality based on severity distribution AND average ratio
+    // More lenient thresholds since time-stretching can handle significant adjustments
     let alignmentQuality: "excellent" | "good" | "acceptable" | "poor";
-    if (criticalIssues === 0 && majorIssues === 0 && minorIssues < segments.length * 0.1) {
-      alignmentQuality = "excellent";
-    } else if (criticalIssues === 0 && majorIssues < segments.length * 0.2) {
-      alignmentQuality = "good";
-    } else if (criticalIssues < segments.length * 0.1 && majorIssues < segments.length * 0.4) {
-      alignmentQuality = "acceptable";
+    
+    // Calculate severity percentage
+    const criticalPct = criticalIssues / segments.length;
+    const majorPct = majorIssues / segments.length;
+    
+    // Primary check: average ratio (overall timing accuracy)
+    const avgDeviation = Math.abs(avgRatio - 1.0);
+    
+    if (avgDeviation < 0.20 && criticalPct < 0.5) {
+      // Avg within 20% and less than half segments are critical
+      if (avgDeviation < 0.10 && criticalIssues === 0) {
+        alignmentQuality = "excellent"; // <10% avg, no critical issues
+      } else if (avgDeviation < 0.15 && criticalPct < 0.3) {
+        alignmentQuality = "good"; // <15% avg, few critical issues
+      } else {
+        alignmentQuality = "acceptable"; // <20% avg, acceptable
+      }
+    } else if (avgDeviation < 0.40 && criticalPct < 0.7) {
+      // Avg within 40% and less than 70% segments are critical
+      alignmentQuality = "acceptable"; // Time-stretching can handle this
     } else {
-      alignmentQuality = "poor";
+      alignmentQuality = "poor"; // >40% average deviation or most segments critical
     }
 
     // Determine overall timing

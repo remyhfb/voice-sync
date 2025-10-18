@@ -84,8 +84,15 @@ VoiceSwap emphasizes processing transparency through visual feedback and real-ti
 4. **Pipeline Integration:**
    - Report generated at alignment step (40-45%)
    - Stored in job metadata
-   - Pipeline aborts if quality is "poor"
+   - Warnings logged for poor quality but processing continues
    - Users can iterate: record → process → review report → improve → repeat
+
+5. **Quality Thresholds (Updated for Realism):**
+   - Excellent: <10% avg deviation, no critical segments
+   - Good: <15% avg deviation, <30% critical segments
+   - Acceptable: <20% avg deviation, <50% critical segments (or <40% avg with <70% critical)
+   - Poor: >40% average deviation or >70% segments critical
+   - System is now more lenient since time-stretching handles adjustments well
 
 **User Benefit:** Clear, actionable feedback on timing accuracy enables iterative improvement of voice recordings for better lip-sync results.
 
