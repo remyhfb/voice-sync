@@ -133,8 +133,13 @@ export class ElevenLabsService {
       ...options.voiceSettings,
     };
     
+    const apiPath = `/v1/speech-to-speech/${voiceId}`;
+    
     console.log(`[S2S] Converting speech with voice: ${voiceId}, audio: ${audioFilePath}`);
+    console.log(`[S2S] API endpoint: https://api.elevenlabs.io${apiPath}`);
     console.log(`[S2S] Voice settings:`, JSON.stringify(voiceSettings));
+    console.log(`[S2S] Model: ${options.modelId || "eleven_multilingual_sts_v2"}`);
+    console.log(`[S2S] Remove background noise: ${options.removeBackgroundNoise !== false}`);
 
     return new Promise((resolve, reject) => {
       const formData = new FormData();
@@ -154,7 +159,7 @@ export class ElevenLabsService {
         {
           protocol: "https:",
           host: "api.elevenlabs.io",
-          path: `/v1/speech-to-speech/${voiceId}`,
+          path: apiPath,
           method: "POST",
           headers: {
             "xi-api-key": this.apiKey,
