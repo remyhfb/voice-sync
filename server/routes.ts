@@ -277,13 +277,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Process video in background
       (async () => {
-        const extractedAudioPath = `/tmp/uploads/${job.id}_extracted.mp3`;
+        const extractedAudioPath = `/tmp/uploads/${job.id}_extracted.m4a`; // Use m4a for original audio
         const convertedAudioPath = `/tmp/uploads/${job.id}_converted.mp3`;
         const mergedVideoPath = `/tmp/uploads/${job.id}_final.mp4`;
         
         try {
-          // Step 1: Extract audio (0-30%)
-          console.log(`[JOB ${job.id}] Extracting audio from video`);
+          // Step 1: Extract audio without any conversion (0-30%)
+          console.log(`[JOB ${job.id}] Extracting audio from video (no conversion)`);
           await ffmpegService.extractAudio(videoFile.path, extractedAudioPath);
           
           await storage.updateProcessingJob(job.id, {

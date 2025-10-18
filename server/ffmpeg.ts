@@ -18,10 +18,7 @@ export class FFmpegService {
       ffmpeg(videoPath)
         .outputOptions([
           "-vn",              // No video
-          "-acodec", "libmp3lame",  // MP3 codec
-          "-ab", "192k",      // 192 kbps bitrate
-          "-ar", "44100",     // 44.1kHz sample rate (ElevenLabs standard)
-          "-ac", "1"          // Mono (single channel)
+          "-acodec", "copy"   // Copy audio stream without re-encoding
         ])
         .output(outputPath)
         .on("codecData", (data) => {
