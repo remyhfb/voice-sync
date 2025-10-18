@@ -382,8 +382,10 @@ export class FFmpegService {
       const duration = endTime - startTime;
       
       ffmpeg(videoPath)
+        .inputOptions([
+          "-ss", startTime.toString()  // Must be input option for codec copy
+        ])
         .outputOptions([
-          "-ss", startTime.toString(),
           "-t", duration.toString(),
           "-an", // No audio
           "-c:v", "copy"
