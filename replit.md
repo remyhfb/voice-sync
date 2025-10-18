@@ -119,7 +119,33 @@ Preferred communication style: Simple, everyday language.
 - Estimated time displays for operations
 - Error message handling with user-friendly feedback
 
-## Recent Changes (October 2025)
+## Recent Changes (October 18, 2025)
+
+### Complete Pivot to RVC Voice Conversion (Completed)
+**Problem Solved:** ElevenLabs TTS generated entirely new audio from text, which changed timing and broke lip-sync. The "uncanny valley" effect made videos unusable.
+
+**Solution:** Replaced the entire pipeline with RVC (Retrieval-based Voice Conversion), which transforms the original audio to match the cloned voice while preserving exact timing/prosody - resulting in perfect lip-sync.
+
+**Changes Made:**
+- Created Replicate RVC service for model training and voice conversion
+- Updated database schema: removed `elevenLabsVoiceId`, added `rvcModelUrl`, `rvcTrainingId`, and `errorMessage`
+- Removed transcription/editing pipeline (no longer needed for voice conversion)
+- Rebuilt voice training route with proper timeout handling and error persistence
+- Rebuilt video processing route with RVC voice conversion
+- Added comprehensive error handling with try/finally cleanup for all temp files
+- Updated frontend to remove transcription editor and show RVC pipeline
+- Added error message display for failed voice training
+
+**Reliability Features:**
+- Explicit timeout handling (10 minutes) with failure marking and error messages
+- Try/finally cleanup ensures temp files are always deleted
+- Error persistence in database for frontend visibility
+- Stack trace logging for operational debugging
+- Temp file path cleanup from job records after processing
+
+**Architecture Review:** Passed architect review - production-ready ✅
+
+## Previous Changes
 
 ### Manual Transcription Editing (Completed)
 - Added transcription editor that pauses processing at "awaiting_review" status
@@ -157,9 +183,9 @@ Preferred communication style: Simple, everyday language.
 
 ### Required Environment Variables
 
-**ELEVENLABS_API_KEY** (Required)
-- Obtain from https://elevenlabs.io/
-- Used for voice cloning and text-to-speech generation
+**REPLICATE_API_TOKEN** (Required)
+- Obtain from https://replicate.com/
+- Used for RVC model training and voice conversion
 - Without this key, voice creation and processing will return 503 errors
 
 **Object Storage** (Auto-configured by Replit)
@@ -167,8 +193,6 @@ Preferred communication style: Simple, everyday language.
 - PRIVATE_OBJECT_DIR
 - PUBLIC_OBJECT_SEARCH_PATHS
 
-**OpenAI** (Auto-configured via integration)
-- OPENAI_API_KEY - Used for Whisper transcription
 
 ## Current Status
 

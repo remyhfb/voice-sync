@@ -79,6 +79,14 @@ export function VoiceCloneCard({ voiceClone, onPlay, onUse, onDelete }: VoiceClo
           </div>
         )}
         
+        {voiceClone.status === "failed" && voiceClone.errorMessage && (
+          <div className="mt-3 p-2 bg-destructive/10 border border-destructive/20 rounded-md">
+            <p className="text-xs text-destructive font-medium" data-testid="text-error-message">
+              {voiceClone.errorMessage}
+            </p>
+          </div>
+        )}
+        
         {voiceClone.createdAt && (
           <p className="text-xs text-muted-foreground mt-3">
             Created {new Date(voiceClone.createdAt).toLocaleDateString()}
