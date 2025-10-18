@@ -713,15 +713,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Step 4: Align segments and calculate time-stretch ratios (40-45%)
           console.log(`[JOB ${job.id}] [LIPSYNC] Aligning segments and calculating time-stretch ratios`);
           const alignments = await aligner.alignSegments(veoSegments, userSegments);
-          const quality = aligner.analyzeAlignment(alignments);
+          const alignmentReport = aligner.generateAlignmentReport(alignments);
           
-          console.log(`[JOB ${job.id}] [LIPSYNC] Alignment quality: ${quality.quality}`);
-          console.log(`[JOB ${job.id}] [LIPSYNC] Avg ratio: ${quality.avgRatio.toFixed(2)}, Range: ${quality.minRatio.toFixed(2)}-${quality.maxRatio.toFixed(2)}`);
+          console.log(`[JOB ${job.id}] [LIPSYNC] Alignment quality: ${alignmentReport.summary.alignmentQuality}`);
+          console.log(`[JOB ${job.id}] [LIPSYNC] Avg ratio: ${alignmentReport.summary.avgTimeStretchRatio.toFixed(2)}`);
+          console.log(`[JOB ${job.id}] [LIPSYNC] Issues: ${alignmentReport.summary.criticalIssues} critical, ${alignmentReport.summary.majorIssues} major, ${alignmentReport.summary.minorIssues} minor`);
           
           // Abort if alignment quality is too poor
-          if (quality.quality === "poor") {
+          if (alignmentReport.summary.alignmentQuality === "poor") {
             throw new Error(
-              `Alignment quality is poor (avg ratio: ${quality.avgRatio.toFixed(2)}). ` +
+              `Alignment quality is poor (avg ratio: ${alignmentReport.summary.avgTimeStretchRatio.toFixed(2)}). ` +
               `Your voice timing differs too much from VEO video. ` +
               `Try re-recording with timing closer to the video, or use a different pipeline.`
             );
@@ -731,8 +732,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             progress: 45,
             metadata: {
               ...job.metadata,
-              alignmentQuality: quality.quality,
-              avgTimeStretchRatio: quality.avgRatio
+              alignmentQuality: alignmentReport.summary.alignmentQuality,
+              avgTimeStretchRatio: alignmentReport.summary.avgTimeStretchRatio,
+              alignmentReport: alignmentReport
             }
           });
 

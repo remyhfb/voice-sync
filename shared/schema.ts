@@ -35,6 +35,37 @@ export const processingJobs = pgTable("processing_jobs", {
     convertedAudioDuration?: number;
     alignmentQuality?: "excellent" | "good" | "acceptable" | "poor";
     avgTimeStretchRatio?: number;
+    alignmentReport?: {
+      summary: {
+        totalSegments: number;
+        avgTimeStretchRatio: number;
+        alignmentQuality: "excellent" | "good" | "acceptable" | "poor";
+        overallTiming: "too_fast" | "too_slow" | "perfect";
+        criticalIssues: number;
+        majorIssues: number;
+        minorIssues: number;
+      };
+      segments: Array<{
+        segmentIndex: number;
+        veoText: string;
+        userText: string;
+        textSimilarity: number;
+        veoTiming: { start: number; end: number; duration: number };
+        userTiming: { start: number; end: number; duration: number };
+        timeStretchRatio: number;
+        appliedRatio: number;
+        adjustment: "stretched" | "compressed" | "unchanged";
+        speedChange: string;
+        severity: "critical" | "major" | "minor" | "perfect";
+      }>;
+      recommendations: string[];
+      topProblemSegments: Array<{
+        segmentIndex: number;
+        text: string;
+        issue: string;
+        recommendation: string;
+      }>;
+    };
     errorMessage?: string;
     errorStack?: string;
   }>(),

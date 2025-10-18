@@ -15,6 +15,40 @@ export interface AlignmentResult {
   method: "stretch" | "compress" | "keep"; // What to do with video segment
 }
 
+export interface SegmentReport {
+  segmentIndex: number;
+  veoText: string;
+  userText: string;
+  textSimilarity: number;
+  veoTiming: { start: number; end: number; duration: number };
+  userTiming: { start: number; end: number; duration: number };
+  timeStretchRatio: number;
+  appliedRatio: number; // Clamped ratio actually used
+  adjustment: "stretched" | "compressed" | "unchanged";
+  speedChange: string; // e.g., "25% slower", "15% faster"
+  severity: "critical" | "major" | "minor" | "perfect";
+}
+
+export interface AlignmentReport {
+  summary: {
+    totalSegments: number;
+    avgTimeStretchRatio: number;
+    alignmentQuality: "excellent" | "good" | "acceptable" | "poor";
+    overallTiming: "too_fast" | "too_slow" | "perfect";
+    criticalIssues: number;
+    majorIssues: number;
+    minorIssues: number;
+  };
+  segments: SegmentReport[];
+  recommendations: string[];
+  topProblemSegments: {
+    segmentIndex: number;
+    text: string;
+    issue: string;
+    recommendation: string;
+  }[];
+}
+
 export class SegmentAligner {
   private replicate: ReplicateService;
 
@@ -241,7 +275,193 @@ export class SegmentAligner {
   }
 
   /**
-   * Analyze alignment quality and provide feedback
+   * Generate comprehensive alignment report with actionable recommendations
+   */
+  generateAlignmentReport(alignments: AlignmentResult[]): AlignmentReport {
+    if (alignments.length === 0) {
+      return {
+        summary: {
+          totalSegments: 0,
+          avgTimeStretchRatio: 1.0,
+          alignmentQuality: "excellent",
+          overallTiming: "perfect",
+          criticalIssues: 0,
+          majorIssues: 0,
+          minorIssues: 0,
+        },
+        segments: [],
+        recommendations: ["No segments to analyze"],
+        topProblemSegments: [],
+      };
+    }
+
+    // Analyze each segment
+    const segments: SegmentReport[] = alignments.map((alignment, index) => {
+      const ratio = alignment.timeStretchRatio;
+      const appliedRatio = this.calculateSafeRatio(ratio);
+      const textSimilarity = this.calculateTextSimilarity(
+        alignment.veoSegment.text,
+        alignment.userSegment.text
+      );
+
+      // Calculate severity
+      let severity: "critical" | "major" | "minor" | "perfect";
+      if (Math.abs(ratio - 1.0) < 0.05) {
+        severity = "perfect"; // Within 5%
+      } else if (Math.abs(ratio - 1.0) < 0.15) {
+        severity = "minor"; // Within 15%
+      } else if (Math.abs(ratio - 1.0) < 0.30) {
+        severity = "major"; // Within 30%
+      } else {
+        severity = "critical"; // >30% off
+      }
+
+      // Calculate speed change description
+      let speedChange: string;
+      let adjustment: "stretched" | "compressed" | "unchanged";
+      
+      if (ratio > 1.05) {
+        const pct = Math.round((ratio - 1.0) * 100);
+        speedChange = `${pct}% slower`;
+        adjustment = "stretched";
+      } else if (ratio < 0.95) {
+        const pct = Math.round((1.0 - ratio) * 100);
+        speedChange = `${pct}% faster`;
+        adjustment = "compressed";
+      } else {
+        speedChange = "perfect match";
+        adjustment = "unchanged";
+      }
+
+      return {
+        segmentIndex: index,
+        veoText: alignment.veoSegment.text,
+        userText: alignment.userSegment.text,
+        textSimilarity,
+        veoTiming: {
+          start: alignment.veoSegment.start,
+          end: alignment.veoSegment.end,
+          duration: alignment.veoSegment.duration,
+        },
+        userTiming: {
+          start: alignment.userSegment.start,
+          end: alignment.userSegment.end,
+          duration: alignment.userSegment.duration,
+        },
+        timeStretchRatio: ratio,
+        appliedRatio,
+        adjustment,
+        speedChange,
+        severity,
+      };
+    });
+
+    // Calculate summary statistics
+    const ratios = alignments.map(a => a.timeStretchRatio);
+    const avgRatio = ratios.reduce((sum, r) => sum + r, 0) / ratios.length;
+    
+    const criticalIssues = segments.filter(s => s.severity === "critical").length;
+    const majorIssues = segments.filter(s => s.severity === "major").length;
+    const minorIssues = segments.filter(s => s.severity === "minor").length;
+
+    // Determine overall quality
+    let alignmentQuality: "excellent" | "good" | "acceptable" | "poor";
+    if (criticalIssues === 0 && majorIssues === 0 && minorIssues < segments.length * 0.1) {
+      alignmentQuality = "excellent";
+    } else if (criticalIssues === 0 && majorIssues < segments.length * 0.2) {
+      alignmentQuality = "good";
+    } else if (criticalIssues < segments.length * 0.1 && majorIssues < segments.length * 0.4) {
+      alignmentQuality = "acceptable";
+    } else {
+      alignmentQuality = "poor";
+    }
+
+    // Determine overall timing
+    let overallTiming: "too_fast" | "too_slow" | "perfect";
+    if (avgRatio > 1.1) {
+      overallTiming = "too_slow";
+    } else if (avgRatio < 0.9) {
+      overallTiming = "too_fast";
+    } else {
+      overallTiming = "perfect";
+    }
+
+    // Generate recommendations
+    const recommendations: string[] = [];
+    
+    if (alignmentQuality === "excellent") {
+      recommendations.push("🎉 Excellent alignment! Your timing closely matches the VEO video.");
+    } else if (alignmentQuality === "good") {
+      recommendations.push("✅ Good alignment overall. Minor adjustments applied.");
+    } else if (alignmentQuality === "acceptable") {
+      recommendations.push("⚠️ Acceptable alignment with some timing differences. Consider re-recording problematic segments.");
+    } else {
+      recommendations.push("❌ Poor alignment detected. Your voice timing significantly differs from the video. Please re-record with timing closer to the VEO video.");
+    }
+
+    if (overallTiming === "too_slow") {
+      recommendations.push(`🐌 You're speaking ${Math.round((avgRatio - 1) * 100)}% slower than VEO on average. Try speeding up your delivery.`);
+    } else if (overallTiming === "too_fast") {
+      recommendations.push(`🏃 You're speaking ${Math.round((1 - avgRatio) * 100)}% faster than VEO on average. Try slowing down your delivery.`);
+    }
+
+    if (criticalIssues > 0) {
+      recommendations.push(`🚨 ${criticalIssues} segment${criticalIssues > 1 ? 's' : ''} with critical timing issues (>30% off). Focus on these first.`);
+    }
+
+    if (majorIssues > 0) {
+      recommendations.push(`⚠️ ${majorIssues} segment${majorIssues > 1 ? 's' : ''} with major timing issues (15-30% off). Work on improving these.`);
+    }
+
+    // Identify top problem segments
+    const problemSegments = segments
+      .filter(s => s.severity === "critical" || s.severity === "major")
+      .sort((a, b) => Math.abs(b.timeStretchRatio - 1.0) - Math.abs(a.timeStretchRatio - 1.0))
+      .slice(0, 5)
+      .map(seg => {
+        let issue: string;
+        let recommendation: string;
+
+        if (seg.timeStretchRatio > 1.3) {
+          issue = `You're ${Math.round((seg.timeStretchRatio - 1) * 100)}% slower than VEO`;
+          recommendation = "Speed up this line significantly - try saying it faster";
+        } else if (seg.timeStretchRatio > 1.1) {
+          issue = `You're ${Math.round((seg.timeStretchRatio - 1) * 100)}% slower than VEO`;
+          recommendation = "Increase your pace for this line";
+        } else if (seg.timeStretchRatio < 0.7) {
+          issue = `You're ${Math.round((1 - seg.timeStretchRatio) * 100)}% faster than VEO`;
+          recommendation = "Slow down this line significantly - take your time";
+        } else {
+          issue = `You're ${Math.round((1 - seg.timeStretchRatio) * 100)}% faster than VEO`;
+          recommendation = "Decrease your pace for this line";
+        }
+
+        return {
+          segmentIndex: seg.segmentIndex,
+          text: seg.veoText,
+          issue,
+          recommendation,
+        };
+      });
+
+    return {
+      summary: {
+        totalSegments: segments.length,
+        avgTimeStretchRatio: avgRatio,
+        alignmentQuality,
+        overallTiming,
+        criticalIssues,
+        majorIssues,
+        minorIssues,
+      },
+      segments,
+      recommendations,
+      topProblemSegments: problemSegments,
+    };
+  }
+
+  /**
+   * Analyze alignment quality and provide feedback (legacy method for compatibility)
    */
   analyzeAlignment(alignments: AlignmentResult[]): {
     avgRatio: number;
@@ -250,40 +470,15 @@ export class SegmentAligner {
     outOfRangeCount: number;
     quality: "excellent" | "good" | "acceptable" | "poor";
   } {
-    if (alignments.length === 0) {
-      return {
-        avgRatio: 1.0,
-        minRatio: 1.0,
-        maxRatio: 1.0,
-        outOfRangeCount: 0,
-        quality: "excellent"
-      };
-    }
-
+    const report = this.generateAlignmentReport(alignments);
     const ratios = alignments.map(a => a.timeStretchRatio);
-    const avgRatio = ratios.reduce((sum, r) => sum + r, 0) / ratios.length;
-    const minRatio = Math.min(...ratios);
-    const maxRatio = Math.max(...ratios);
-    const outOfRangeCount = ratios.filter(r => r < 0.8 || r > 1.2).length;
-
-    let quality: "excellent" | "good" | "acceptable" | "poor";
     
-    if (avgRatio >= 0.95 && avgRatio <= 1.05 && outOfRangeCount === 0) {
-      quality = "excellent"; // Within 5%, all segments good
-    } else if (avgRatio >= 0.9 && avgRatio <= 1.1 && outOfRangeCount < alignments.length * 0.2) {
-      quality = "good"; // Within 10%, <20% segments need adjustment
-    } else if (avgRatio >= 0.8 && avgRatio <= 1.2 && outOfRangeCount < alignments.length * 0.5) {
-      quality = "acceptable"; // Within 20%, <50% segments need adjustment
-    } else {
-      quality = "poor"; // Too many segments out of range
-    }
-
     return {
-      avgRatio,
-      minRatio,
-      maxRatio,
-      outOfRangeCount,
-      quality
+      avgRatio: report.summary.avgTimeStretchRatio,
+      minRatio: Math.min(...ratios),
+      maxRatio: Math.max(...ratios),
+      outOfRangeCount: report.summary.criticalIssues + report.summary.majorIssues,
+      quality: report.summary.alignmentQuality,
     };
   }
 }
