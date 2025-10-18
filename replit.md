@@ -30,7 +30,35 @@ VoiceSwap emphasizes processing transparency through visual feedback and real-ti
 
 ## Recent Changes (October 18, 2025)
 
-### Alignment Report System (Latest)
+### Automatic Silence Trimming (Latest)
+**Problem:** Users always upload audio with silence padding at start/end. For example: 8-second video + 11-second audio (same content, but 2s silence at start, 1s at end).
+
+**Solution:** Automatic silence detection and trimming before transcription/alignment:
+
+**Implementation:**
+1. **FFmpegService.trimSilence():**
+   - Uses FFmpeg silencedetect filter (-50dB threshold, 0.1s minimum)
+   - Detects leading silence: first silence segment starting within 0.5s
+   - Detects trailing silence: last silence segment extending to (or near) EOF
+   - Guards against zero-duration (entirely silent files)
+   - Returns trimming metadata: start/end trimmed, original/trimmed durations
+
+2. **Pipeline Integration:**
+   - Step 2.5 (15-20%): Trim silence from BOTH user audio AND VEO audio
+   - Runs after ElevenLabs cleanup, before Whisper transcription
+   - Parallel processing for efficiency
+   - Stores results in job metadata
+   - Uses trimmed versions for alignment (ensures durations match)
+
+3. **Robustness:**
+   - Handles multi-second padding (typical 2-4s trailing silence)
+   - Returns original file if trimming would create <0.1s duration
+   - Works with any audio format
+   - Transparent to user (just works)
+
+**User Benefit:** Upload audio with any amount of silence padding - system automatically finds and aligns the actual speech content with video.
+
+### Alignment Report System
 **Feature:** Detailed post-processing reports for iterative voice recording improvement.
 
 **Implementation:**
