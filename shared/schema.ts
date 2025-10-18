@@ -8,7 +8,7 @@ export const voiceClones = pgTable("voice_clones", {
   name: text("name").notNull(),
   elevenLabsVoiceId: text("eleven_labs_voice_id"), // ElevenLabs voice ID for S2S
   sampleCount: integer("sample_count").notNull().default(0),
-  samplePaths: jsonb("sample_paths").$type<string[]>().notNull().default([]),
+  samplePaths: jsonb("sample_paths").$type<string[]>(),
   status: text("status").notNull().default("pending"), // pending, training, ready, failed
   trainingProgress: integer("training_progress").notNull().default(0), // 0-100 progress during training
   quality: integer("quality"), // 0-100 similarity score

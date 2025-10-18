@@ -144,7 +144,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: "ready",
             trainingProgress: 100,
             quality: 90 + Math.floor(Math.random() * 10),
-            samplePaths: [], // Clear temp paths after successful clone
+            samplePaths: null, // Clear temp paths after successful clone
           });
 
           console.log(`[ElevenLabs] Voice cloning completed for voice ${voice.id}`);
@@ -155,7 +155,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.updateVoiceClone(voice.id, { 
             status: "failed",
             trainingProgress: 0,
-            samplePaths: [], // Clear temp paths on error
+            samplePaths: null, // Clear temp paths on error
             errorMessage,
           });
         } finally {
@@ -287,9 +287,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const finalVideoUrl = videoUploadUrl.split('?')[0];
 
           await storage.updateProcessingJob(job.id, {
-            videoPath: undefined, // Clear temp file path
-            extractedAudioPath: undefined, // Clear temp file path
-            convertedAudioPath: undefined, // Clear temp file path
+            videoPath: null, // Clear temp file path
+            extractedAudioPath: null, // Clear temp file path
+            convertedAudioPath: null, // Clear temp file path
             mergedVideoPath: finalVideoUrl,
             status: "completed",
             progress: 100,
@@ -301,9 +301,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error(`[JOB ${job.id}] Stack trace:`, error.stack);
           await storage.updateProcessingJob(job.id, {
             status: "failed",
-            videoPath: undefined, // Clear temp file paths on failure
-            extractedAudioPath: undefined,
-            convertedAudioPath: undefined,
+            videoPath: null, // Clear temp file paths on failure
+            extractedAudioPath: null,
+            convertedAudioPath: null,
             metadata: {
               ...job.metadata,
               errorMessage: error.message,

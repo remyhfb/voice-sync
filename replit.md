@@ -57,7 +57,8 @@ Preferred communication style: Simple, everyday language.
 **Database**
 - PostgreSQL via Neon serverless driver for production scalability
 - Drizzle ORM for type-safe database queries and schema management
-- In-memory storage fallback for development/testing (MemStorage class)
+- DatabaseStorage class implementing IStorage interface for all CRUD operations
+- Persistent data storage for voice clones and processing jobs
 
 **Schema Design**
 - `voice_clones` table: Stores voice clone metadata, ElevenLabs voice IDs, sample references, status, and quality scores
@@ -120,6 +121,25 @@ Preferred communication style: Simple, everyday language.
 - Error message handling with user-friendly feedback
 
 ## Recent Changes (October 18, 2025)
+
+### Database Persistence Implementation (October 18, 2025)
+**Problem Solved:** Application was using in-memory storage, causing data loss on server restarts and preventing production deployments.
+
+**Solution:** Implemented PostgreSQL database persistence using Drizzle ORM:
+- Created `server/db.ts` with Neon serverless database connection
+- Implemented `DatabaseStorage` class using Drizzle queries for all CRUD operations
+- Replaced in-memory storage with persistent database storage
+- Fixed production DNS error by simplifying WebSocket configuration
+- Fixed temp file path cleanup: Using `null` instead of `undefined` to properly clear paths
+- Made `samplePaths` nullable in schema to allow cleanup after processing
+- Added missing `GET /api/jobs` endpoint for fetching all jobs
+
+**Technical Implementation:**
+- PostgreSQL database with Drizzle ORM for type-safe queries
+- Neon serverless driver for scalable database connections
+- DatabaseStorage implements IStorage interface for consistency
+- Proper null handling for optional fields (temp file paths cleared after processing)
+- Automatic schema migrations with `npm run db:push`
 
 ### Complete Pivot to ElevenLabs Speech-to-Speech (October 18, 2025)
 **Problem Solved:** Replicate's RVC training endpoint became completely disabled ("Version not trainable" errors across all versions). Previous TTS approach also broke lip-sync by generating entirely new audio.
