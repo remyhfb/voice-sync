@@ -79,7 +79,7 @@ export class SyncLabsService {
 
       const options = {
         hostname: this.baseUrl,
-        path: "/generate",
+        path: "/video",
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -160,7 +160,7 @@ export class SyncLabsService {
     return new Promise((resolve, reject) => {
       const options = {
         hostname: this.baseUrl,
-        path: `/generate/${jobId}`,
+        path: `/video/${jobId}`,
         method: "GET",
         headers: {
           "x-api-key": this.apiKey,
