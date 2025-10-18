@@ -11,6 +11,14 @@ export class SyncLabsService {
   /**
    * Apply lip-sync to video using Sync Labs API
    * Takes video + audio and generates perfectly synced output
+   * 
+   * Models:
+   * - lipsync-2: Standard model ($0.04-$0.05/sec, ~$2.40-$3/min)
+   * - lipsync-2-pro: Latest premium model with enhanced detail ($0.067-$0.083/sec, ~$4-$5/min)
+   *   - Better beard/facial hair handling
+   *   - Improved teeth generation
+   *   - Superior detail preservation
+   *   - Requires Scale plan or higher
    */
   async lipSync(
     videoPath: string,
@@ -23,7 +31,8 @@ export class SyncLabsService {
       throw new Error("Sync Labs API key not configured");
     }
 
-    const model = options.model || "lipsync-2"; // Use standard model by default
+    // Use lipsync-2 for free tier, upgrade to lipsync-2-pro when on Scale plan
+    const model = options.model || "lipsync-2";
 
     console.log(`[SyncLabs] Starting lip-sync with model: ${model}`);
     console.log(`[SyncLabs] Video: ${videoPath}, Audio: ${audioPath}`);
