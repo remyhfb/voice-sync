@@ -279,7 +279,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       (async () => {
         const extractedAudioPath = `/tmp/uploads/${job.id}_extracted.m4a`; // Preserve original audio format
         const isolatedAudioPath = `/tmp/uploads/${job.id}_isolated.mp3`; // Isolated vocals only
-        const convertedAudioPath = `/tmp/uploads/${job.id}_converted.mp3`;
+        const normalizedAudioPath = `/tmp/uploads/${job.id}_normalized.mp3`; // Stage 1: normalized to ElevenLabs voice
+        const convertedAudioPath = `/tmp/uploads/${job.id}_converted.mp3`; // Stage 2: final cloned voice
         const mergedVideoPath = `/tmp/uploads/${job.id}_final.mp4`;
         
         try {
@@ -292,7 +293,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             progress: 20,
           });
 
-          // Step 2: Isolate vocals (remove background music/SFX) (20-40%)
+          // Step 2: Isolate vocals (remove background music/SFX) (20-30%)
           console.log(`[JOB ${job.id}] Isolating vocals (removing background music/SFX)`);
           const elevenlabs = new ElevenLabsService();
           const isolatedBuffer = await elevenlabs.isolateVoice(extractedAudioPath);
@@ -301,18 +302,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const isolatedStats = await fs.stat(isolatedAudioPath);
           console.log(`[JOB ${job.id}] Isolated vocals size: ${isolatedStats.size} bytes`);
           
-          await storage.updateProcessingJob(job.id, { progress: 40 });
+          await storage.updateProcessingJob(job.id, { progress: 30 });
 
-          // Step 3: Speech-to-Speech conversion with ElevenLabs (40-80%)
-          console.log(`[JOB ${job.id}] Converting voice with ElevenLabs S2S`);
-          console.log(`[JOB ${job.id}] Voice ID: ${voice.elevenLabsVoiceId}`);
-          console.log(`[JOB ${job.id}] Voice name: ${voice.name}`);
-          console.log(`[JOB ${job.id}] Using isolated vocals: ${isolatedAudioPath}`);
+          // Step 3: STAGE 1 S2S - Normalize to ElevenLabs voice (30-55%)
+          console.log(`[JOB ${job.id}] ⚡ Stage 1: Normalizing synthetic voice to natural ElevenLabs voice`);
+          const NEUTRAL_VOICE_ID = "pNInz6obpgDQGcFmaJgB"; // Adam - neutral male voice
+          const normalizedBuffer = await elevenlabs.speechToSpeech(
+            NEUTRAL_VOICE_ID,
+            isolatedAudioPath,
+            { removeBackgroundNoise: false }
+          );
+          await fs.writeFile(normalizedAudioPath, normalizedBuffer);
+          
+          console.log(`[JOB ${job.id}] Stage 1 complete: Normalized audio (${normalizedBuffer.length} bytes)`);
+          await storage.updateProcessingJob(job.id, { progress: 55 });
+
+          // Step 4: STAGE 2 S2S - Convert normalized audio to cloned voice (55-80%)
+          console.log(`[JOB ${job.id}] ⚡ Stage 2: Converting normalized voice to your cloned voice`);
+          console.log(`[JOB ${job.id}] Target Voice ID: ${voice.elevenLabsVoiceId}`);
+          console.log(`[JOB ${job.id}] Target Voice name: ${voice.name}`);
           
           const convertedBuffer = await elevenlabs.speechToSpeech(
             voice.elevenLabsVoiceId!,
-            isolatedAudioPath, // Use isolated vocals instead of raw extracted audio
-            { removeBackgroundNoise: false } // Already isolated, no need for additional noise removal
+            normalizedAudioPath, // Use normalized audio from Stage 1
+            { removeBackgroundNoise: false }
           );
           
           console.log(`[JOB ${job.id}] S2S conversion completed, output size: ${convertedBuffer.length} bytes`);
@@ -380,6 +393,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await fs.unlink(videoFile.path).catch(() => {});
           await fs.unlink(extractedAudioPath).catch(() => {});
           await fs.unlink(isolatedAudioPath).catch(() => {});
+          await fs.unlink(normalizedAudioPath).catch(() => {});
           await fs.unlink(convertedAudioPath).catch(() => {});
           await fs.unlink(mergedVideoPath).catch(() => {});
         }

@@ -116,14 +116,20 @@ export default function CreatePage() {
       {
         id: "isolation",
         label: "Vocal Isolation (Removing Background Music/SFX)",
-        status: job.progress >= 40 ? "completed" : job.progress >= 20 ? "processing" : "pending",
-        estimatedTime: "~30 seconds",
+        status: job.progress >= 30 ? "completed" : job.progress >= 20 ? "processing" : "pending",
+        estimatedTime: "~20 seconds",
+      },
+      {
+        id: "normalization",
+        label: "Stage 1: Normalizing Synthetic Voice",
+        status: job.progress >= 55 ? "completed" : job.progress >= 30 ? "processing" : "pending",
+        estimatedTime: "~40 seconds",
       },
       {
         id: "conversion",
-        label: "Voice Conversion (S2S preserves timing perfectly)",
-        status: job.progress >= 80 ? "completed" : job.progress >= 40 ? "processing" : "pending",
-        estimatedTime: "~2 minutes",
+        label: "Stage 2: Voice Conversion to Clone",
+        status: job.progress >= 80 ? "completed" : job.progress >= 55 ? "processing" : "pending",
+        estimatedTime: "~40 seconds",
       },
       {
         id: "merging",
