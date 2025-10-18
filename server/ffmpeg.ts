@@ -15,16 +15,11 @@ export class FFmpegService {
     return new Promise((resolve, reject) => {
       let duration = 0;
 
-      // Normalize audio for ElevenLabs compatibility
-      // VEO 3 uses 48kHz AAC which doesn't work well with S2S
-      // Convert to standard 44.1kHz mono MP3
+      // Extract audio without conversion - ElevenLabs accepts any format
       ffmpeg(videoPath)
         .outputOptions([
-          "-vn",                    // No video
-          "-acodec", "libmp3lame",  // MP3 codec (universally compatible)
-          "-ar", "44100",           // 44.1kHz sample rate (ElevenLabs standard)
-          "-ac", "1",               // Mono (reduces file size, S2S works better)
-          "-ab", "128k"             // 128kbps bitrate (sufficient quality)
+          "-vn",              // No video
+          "-acodec", "copy"   // Copy original audio stream
         ])
         .output(outputPath)
         .on("codecData", (data) => {

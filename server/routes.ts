@@ -277,7 +277,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Process video in background
       (async () => {
-        const extractedAudioPath = `/tmp/uploads/${job.id}_extracted.mp3`; // Normalized to MP3 for ElevenLabs
+        const extractedAudioPath = `/tmp/uploads/${job.id}_extracted.m4a`; // Preserve original audio format
         const convertedAudioPath = `/tmp/uploads/${job.id}_converted.mp3`;
         const mergedVideoPath = `/tmp/uploads/${job.id}_final.mp4`;
         
