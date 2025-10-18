@@ -111,6 +111,13 @@ export class ElevenLabsService {
     options: {
       modelId?: string;
       removeBackgroundNoise?: boolean;
+      voiceSettings?: {
+        stability?: number;
+        similarity_boost?: number;
+        style?: number;
+        use_speaker_boost?: boolean;
+        voice_conversion_strength?: number;
+      };
     } = {},
   ): Promise<Buffer> {
     if (!this.apiKey) {
@@ -130,6 +137,15 @@ export class ElevenLabsService {
       
       // Enable background noise removal for cleaner output
       formData.append("remove_background_noise", (options.removeBackgroundNoise !== false).toString());
+      
+      // Voice settings for full voice conversion (1.0 = complete voice replacement)
+      const voiceSettings = {
+        stability: 0.5,
+        similarity_boost: 0.75,
+        voice_conversion_strength: 1.0, // Full voice replacement (default 0.3 mixes voices)
+        ...options.voiceSettings,
+      };
+      formData.append("voice_settings", JSON.stringify(voiceSettings));
 
       formData.submit(
         {
