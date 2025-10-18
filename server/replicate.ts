@@ -1,6 +1,8 @@
 import Replicate from "replicate";
 
-const REPLICATE_RVC_TRAINING_MODEL = "replicate/train-rvc-model:ddf8a7c6e0422ab0f4f53fccf675b1f58c93a3cff3bdac5b4e0231f3cac12a8b";
+// Trainable version for creating custom RVC models
+const REPLICATE_RVC_TRAINING_MODEL = "replicate/train-rvc-model:cf360587a27f67500c30fc31de1e0f0f9aa26dcd7b866e6ac937a07bd104bad9";
+// Inference version for voice conversion
 const REPLICATE_RVC_INFERENCE_MODEL = "zsxkib/realistic-voice-cloning:56d0c89f960d4f2e291ace63531a5dc2ab2557c5a9c8c7bf5c85ef537e8b9117";
 
 export class ReplicateService {
