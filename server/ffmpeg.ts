@@ -239,4 +239,97 @@ export class FFmpegService {
         .run();
     });
   }
+
+  /**
+   * Extract a video segment (no audio) by time range
+   */
+  async extractVideoSegment(
+    videoPath: string,
+    outputPath: string,
+    startTime: number,
+    endTime: number
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const duration = endTime - startTime;
+      
+      ffmpeg(videoPath)
+        .outputOptions([
+          "-ss", startTime.toString(),
+          "-t", duration.toString(),
+          "-an", // No audio
+          "-c:v", "copy"
+        ])
+        .output(outputPath)
+        .on("end", () => {
+          console.log(`[FFmpeg] Extracted segment: ${startTime}s-${endTime}s → ${outputPath}`);
+          resolve();
+        })
+        .on("error", (err: any) => reject(new Error(`FFmpeg segment extraction error: ${err.message}`)))
+        .run();
+    });
+  }
+
+  /**
+   * Time-stretch a video segment (speed up or slow down)
+   * ratio < 1.0 = speed up (compress timeline)
+   * ratio > 1.0 = slow down (stretch timeline)
+   * Example: ratio=0.8 means video plays 25% faster
+   */
+  async timeStretchVideoSegment(
+    inputPath: string,
+    outputPath: string,
+    ratio: number
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      console.log(`[FFmpeg] Time-stretching video by ${ratio}x`);
+      
+      ffmpeg(inputPath)
+        .outputOptions([
+          "-filter:v", `setpts=${ratio}*PTS`,
+          "-an" // No audio in segments
+        ])
+        .output(outputPath)
+        .on("end", () => {
+          console.log(`[FFmpeg] Video time-stretched: ${ratio}x → ${outputPath}`);
+          resolve();
+        })
+        .on("error", (err: any) => reject(new Error(`FFmpeg time-stretch error: ${err.message}`)))
+        .run();
+    });
+  }
+
+  /**
+   * Concatenate multiple video segments (no audio)
+   */
+  async concatenateVideoSegments(
+    segmentPaths: string[],
+    outputPath: string
+  ): Promise<void> {
+    if (segmentPaths.length === 0) {
+      throw new Error("No video segments to concatenate");
+    }
+
+    // Create concat file list
+    const concatListPath = `/tmp/concat_video_${Date.now()}.txt`;
+    const concatList = segmentPaths.map(p => `file '${p}'`).join('\n');
+    await fs.writeFile(concatListPath, concatList);
+
+    return new Promise((resolve, reject) => {
+      ffmpeg()
+        .input(concatListPath)
+        .inputOptions(['-f', 'concat', '-safe', '0'])
+        .outputOptions(['-c', 'copy'])
+        .output(outputPath)
+        .on("end", async () => {
+          await fs.unlink(concatListPath).catch(() => {});
+          console.log(`[FFmpeg] Concatenated ${segmentPaths.length} video segments → ${outputPath}`);
+          resolve();
+        })
+        .on("error", async (err: any) => {
+          await fs.unlink(concatListPath).catch(() => {});
+          reject(new Error(`FFmpeg concat error: ${err.message}`));
+        })
+        .run();
+    });
+  }
 }
