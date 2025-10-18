@@ -13,7 +13,8 @@ const upload = multer({ dest: "/tmp/uploads/" });
 const ffmpegService = new FFmpegService();
 
 async function createZipFromFiles(files: string[], outputPath: string): Promise<void> {
-  const output = require('fs').createWriteStream(outputPath);
+  const { createWriteStream } = await import('fs');
+  const output = createWriteStream(outputPath);
   const archive = archiver('zip', { zlib: { level: 9 } });
   
   return new Promise((resolve, reject) => {
