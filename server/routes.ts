@@ -9,6 +9,8 @@ import { ElevenLabsService } from "./elevenlabs";
 import { FFmpegService } from "./ffmpeg";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ReplicateService } from "./replicate";
+import { SyncLabsService } from "./synclabs";
+import { SegmentAligner } from "./segment-aligner";
 
 const upload = multer({ dest: "/tmp/uploads/" });
 const ffmpegService = new FFmpegService();
@@ -641,6 +643,193 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error creating Bark processing job:", error);
       res.status(500).json({ error: error.message || "Failed to create processing job" });
+    }
+  });
+
+  // Lip-sync pipeline: Time-stretch VEO video to match user audio + Sync Labs lip-sync
+  app.post("/api/jobs/process-lipsync", upload.fields([
+    { name: "video", maxCount: 1 },
+    { name: "audio", maxCount: 1 }
+  ]), async (req, res) => {
+    try {
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      const videoFile = files.video?.[0];
+      const audioFile = files.audio?.[0];
+
+      if (!videoFile || !audioFile) {
+        return res.status(400).json({ error: "Both VEO video and user audio required" });
+      }
+
+      const videoMetadata = await ffmpegService.getVideoMetadata(videoFile.path);
+      
+      const job = await storage.createProcessingJob({
+        type: "lipsync",
+        status: "processing",
+        progress: 0,
+        videoPath: videoFile.path,
+        metadata: {
+          videoFileName: videoFile.originalname,
+          audioFileName: audioFile.originalname,
+          videoDuration: videoMetadata.duration,
+          videoSize: videoMetadata.size,
+        },
+      });
+
+      res.json(job);
+
+      // Process in background
+      (async () => {
+        const veoAudioPath = `/tmp/uploads/${job.id}_veo_audio.m4a`;
+        const cleanedUserAudioPath = `/tmp/uploads/${job.id}_cleaned_user.mp3`;
+        const timeStretchedVideoPath = `/tmp/uploads/${job.id}_stretched.mp4`;
+        const lipsyncedVideoPath = `/tmp/uploads/${job.id}_lipsync.mp4`;
+        const segmentPaths: string[] = [];
+        
+        try {
+          // Step 1: Extract VEO audio (0-10%)
+          console.log(`[JOB ${job.id}] [LIPSYNC] Extracting VEO audio for transcription`);
+          await ffmpegService.extractAudio(videoFile.path, veoAudioPath);
+          await storage.updateProcessingJob(job.id, { progress: 10 });
+
+          // Step 2: Clean user audio with ElevenLabs (10-20%)
+          console.log(`[JOB ${job.id}] [LIPSYNC] Cleaning user audio (noise reduction + mic enhancement)`);
+          const elevenlabs = new ElevenLabsService();
+          const cleanedBuffer = await elevenlabs.isolateVoice(audioFile.path);
+          await fs.writeFile(cleanedUserAudioPath, cleanedBuffer);
+          await storage.updateProcessingJob(job.id, { progress: 20 });
+
+          // Step 3: Transcribe both with Whisper (20-40%)
+          console.log(`[JOB ${job.id}] [LIPSYNC] Transcribing VEO video and user audio`);
+          const aligner = new SegmentAligner();
+          
+          const [veoSegments, userSegments] = await Promise.all([
+            aligner.extractSegments(veoAudioPath),
+            aligner.extractSegments(cleanedUserAudioPath)
+          ]);
+          
+          console.log(`[JOB ${job.id}] [LIPSYNC] VEO segments: ${veoSegments.length}, User segments: ${userSegments.length}`);
+          await storage.updateProcessingJob(job.id, { progress: 40 });
+
+          // Step 4: Align segments and calculate time-stretch ratios (40-45%)
+          console.log(`[JOB ${job.id}] [LIPSYNC] Aligning segments and calculating time-stretch ratios`);
+          const alignments = await aligner.alignSegments(veoSegments, userSegments);
+          const quality = aligner.analyzeAlignment(alignments);
+          
+          console.log(`[JOB ${job.id}] [LIPSYNC] Alignment quality: ${quality.quality}`);
+          console.log(`[JOB ${job.id}] [LIPSYNC] Avg ratio: ${quality.avgRatio.toFixed(2)}, Range: ${quality.minRatio.toFixed(2)}-${quality.maxRatio.toFixed(2)}`);
+          
+          await storage.updateProcessingJob(job.id, { 
+            progress: 45,
+            metadata: {
+              ...job.metadata,
+              alignmentQuality: quality.quality,
+              avgTimeStretchRatio: quality.avgRatio
+            }
+          });
+
+          // Step 5: Time-stretch video segments (45-70%)
+          console.log(`[JOB ${job.id}] [LIPSYNC] Time-stretching video to match user timing`);
+          
+          for (let i = 0; i < alignments.length; i++) {
+            const alignment = alignments[i];
+            const segmentPath = `/tmp/uploads/${job.id}_seg_${i}.mp4`;
+            const stretchedPath = `/tmp/uploads/${job.id}_seg_${i}_stretched.mp4`;
+            
+            // Extract video segment (no audio)
+            await ffmpegService.extractVideoSegment(
+              videoFile.path,
+              segmentPath,
+              alignment.veoSegment.start,
+              alignment.veoSegment.end
+            );
+            
+            // Time-stretch if needed
+            if (alignment.method !== "keep") {
+              const safeRatio = aligner.calculateSafeRatio(alignment.timeStretchRatio);
+              await ffmpegService.timeStretchVideoSegment(segmentPath, stretchedPath, safeRatio);
+              segmentPaths.push(stretchedPath);
+              await fs.unlink(segmentPath).catch(() => {});
+            } else {
+              segmentPaths.push(segmentPath);
+            }
+            
+            const progressPercent = 45 + Math.floor((i / alignments.length) * 25);
+            await storage.updateProcessingJob(job.id, { progress: progressPercent });
+          }
+
+          // Concatenate time-stretched segments
+          console.log(`[JOB ${job.id}] [LIPSYNC] Concatenating ${segmentPaths.length} time-stretched segments`);
+          await ffmpegService.concatenateVideoSegments(segmentPaths, timeStretchedVideoPath);
+          await storage.updateProcessingJob(job.id, { progress: 70 });
+
+          // Step 6: Apply Sync Labs lip-sync (70-90%)
+          console.log(`[JOB ${job.id}] [LIPSYNC] Applying lip-sync with Sync Labs`);
+          const synclabs = new SyncLabsService();
+          const lipsyncedBuffer = await synclabs.lipSync(
+            timeStretchedVideoPath,
+            cleanedUserAudioPath,
+            { model: "lipsync-2" }
+          );
+          
+          await fs.writeFile(lipsyncedVideoPath, lipsyncedBuffer);
+          await storage.updateProcessingJob(job.id, { progress: 90 });
+
+          // Step 7: Upload final video (90-100%)
+          console.log(`[JOB ${job.id}] [LIPSYNC] Uploading final video`);
+          const objectStorageService = new ObjectStorageService();
+          const videoUploadUrl = await objectStorageService.getObjectEntityUploadURL();
+          const finalBuffer = await fs.readFile(lipsyncedVideoPath);
+          const finalStats = await fs.stat(lipsyncedVideoPath);
+          
+          await fetch(videoUploadUrl, {
+            method: 'PUT',
+            body: finalBuffer,
+            headers: {
+              'Content-Type': 'video/mp4',
+              'Content-Length': finalStats.size.toString(),
+            },
+          });
+
+          const urlParts = videoUploadUrl.split('?')[0].split('/');
+          const objectId = urlParts[urlParts.length - 1];
+          const finalVideoPath = `/objects/uploads/${objectId}`;
+
+          await storage.updateProcessingJob(job.id, {
+            videoPath: null,
+            mergedVideoPath: finalVideoPath,
+            status: "completed",
+            progress: 100,
+          });
+
+          console.log(`[JOB ${job.id}] [LIPSYNC] Processing completed successfully`);
+        } catch (error: any) {
+          console.error(`[JOB ${job.id}] [LIPSYNC] Error:`, error.message);
+          console.error(`[JOB ${job.id}] [LIPSYNC] Stack:`, error.stack);
+          await storage.updateProcessingJob(job.id, {
+            status: "failed",
+            videoPath: null,
+            metadata: {
+              ...job.metadata,
+              errorMessage: error.message,
+              errorStack: error.stack?.substring(0, 500),
+            },
+          });
+        } finally {
+          // Cleanup temp files
+          await fs.unlink(videoFile.path).catch(() => {});
+          await fs.unlink(audioFile.path).catch(() => {});
+          await fs.unlink(veoAudioPath).catch(() => {});
+          await fs.unlink(cleanedUserAudioPath).catch(() => {});
+          await fs.unlink(timeStretchedVideoPath).catch(() => {});
+          await fs.unlink(lipsyncedVideoPath).catch(() => {});
+          for (const segPath of segmentPaths) {
+            await fs.unlink(segPath).catch(() => {});
+          }
+        }
+      })();
+    } catch (error: any) {
+      console.error("Error creating lipsync job:", error);
+      res.status(500).json({ error: error.message || "Failed to create lipsync job" });
     }
   });
 

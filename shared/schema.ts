@@ -28,10 +28,13 @@ export const processingJobs = pgTable("processing_jobs", {
   voiceCloneId: varchar("voice_clone_id").references(() => voiceClones.id),
   metadata: jsonb("metadata").$type<{
     videoFileName?: string;
+    audioFileName?: string;
     videoDuration?: number;
     videoSize?: number;
     audioFormat?: string;
     convertedAudioDuration?: number;
+    alignmentQuality?: "excellent" | "good" | "acceptable" | "poor";
+    avgTimeStretchRatio?: number;
     errorMessage?: string;
     errorStack?: string;
   }>(),
