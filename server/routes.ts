@@ -691,6 +691,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const lipsyncedVideoPath = `/tmp/uploads/${job.id}_lipsync.mp4`;
         const segmentPaths: string[] = [];
         
+        // Track metadata throughout pipeline to preserve incremental updates
+        let currentMetadata = { ...job.metadata };
+        
         try {
           // Step 1: Extract VEO audio (0-10%)
           console.log(`[JOB ${job.id}] [LIPSYNC] Extracting VEO audio for transcription`);
@@ -717,15 +720,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`[JOB ${job.id}] [LIPSYNC] User audio trimmed: ${userTrimResult.startTrimmed.toFixed(2)}s start, ${userTrimResult.endTrimmed.toFixed(2)}s end`);
           console.log(`[JOB ${job.id}] [LIPSYNC] VEO audio trimmed: ${veoTrimResult.startTrimmed.toFixed(2)}s start, ${veoTrimResult.endTrimmed.toFixed(2)}s end`);
           
+          // Update tracked metadata
+          currentMetadata = {
+            ...currentMetadata,
+            silenceTrimmed: {
+              user: userTrimResult,
+              veo: veoTrimResult
+            }
+          };
+          
           await storage.updateProcessingJob(job.id, { 
             progress: 20,
-            metadata: {
-              ...job.metadata,
-              silenceTrimmed: {
-                user: userTrimResult,
-                veo: veoTrimResult
-              }
-            }
+            metadata: currentMetadata
           });
 
           // Step 3: Transcribe both with Whisper (20-40%)
@@ -755,14 +761,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.warn(`[JOB ${job.id}] [LIPSYNC] WARNING: Poor alignment quality detected (avg ratio: ${alignmentReport.summary.avgTimeStretchRatio.toFixed(2)}). Continuing with time-stretching...`);
           }
           
+          // Update tracked metadata
+          currentMetadata = {
+            ...currentMetadata,
+            alignmentQuality: alignmentReport.summary.alignmentQuality,
+            avgTimeStretchRatio: alignmentReport.summary.avgTimeStretchRatio,
+            alignmentReport: alignmentReport
+          };
+          
           await storage.updateProcessingJob(job.id, { 
             progress: 45,
-            metadata: {
-              ...job.metadata,
-              alignmentQuality: alignmentReport.summary.alignmentQuality,
-              avgTimeStretchRatio: alignmentReport.summary.avgTimeStretchRatio,
-              alignmentReport: alignmentReport
-            }
+            metadata: currentMetadata
           });
 
           // Step 5: Time-stretch video segments (45-70%)
@@ -873,21 +882,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const objectId = urlParts[urlParts.length - 1];
           const finalVideoPath = `/objects/uploads/${objectId}`;
 
-          // Get latest job data to preserve alignment report and other metadata
-          const latestJob = await storage.getProcessingJob(job.id);
-          if (!latestJob) {
-            throw new Error("Job not found during final update");
-          }
+          // Update tracked metadata with final fields
+          currentMetadata = {
+            ...currentMetadata,
+            syncLabsCredits: syncLabsResult.creditsDeducted,
+          };
 
           await storage.updateProcessingJob(job.id, {
             videoPath: null,
             mergedVideoPath: finalVideoPath,
             status: "completed",
             progress: 100,
-            metadata: {
-              ...latestJob.metadata,
-              syncLabsCredits: syncLabsResult.creditsDeducted,
-            } as any, // metadata is JSONB, allows dynamic properties
+            metadata: currentMetadata as any, // metadata is JSONB, allows dynamic properties
           });
 
           console.log(`[JOB ${job.id}] [LIPSYNC] Processing completed successfully`);
@@ -895,16 +901,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error(`[JOB ${job.id}] [LIPSYNC] Error:`, error.message);
           console.error(`[JOB ${job.id}] [LIPSYNC] Stack:`, error.stack);
           
-          // Get latest job data to preserve alignment report even on failure
-          const latestJob = await storage.getProcessingJob(job.id);
+          // Update tracked metadata with error details
+          currentMetadata = {
+            ...currentMetadata,
+            errorMessage: error.message,
+            errorStack: error.stack?.substring(0, 500),
+          };
+          
           await storage.updateProcessingJob(job.id, {
             status: "failed",
             videoPath: null,
-            metadata: {
-              ...(latestJob?.metadata || job.metadata),
-              errorMessage: error.message,
-              errorStack: error.stack?.substring(0, 500),
-            },
+            metadata: currentMetadata,
           });
         } finally {
           // Cleanup temp files
