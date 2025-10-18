@@ -171,12 +171,18 @@ export class ElevenLabsService {
           });
 
           response.on("end", () => {
+            console.log(`[S2S] Response status code: ${response.statusCode}`);
+            console.log(`[S2S] Response headers:`, JSON.stringify(response.headers));
+            
             if (response.statusCode && response.statusCode >= 200 && response.statusCode < 300) {
               const audioBuffer = Buffer.concat(chunks);
               console.log(`[S2S] Conversion completed: ${audioBuffer.length} bytes`);
+              console.log(`[S2S] Content-Type: ${response.headers['content-type']}`);
+              console.log(`[S2S] First 100 bytes:`, audioBuffer.slice(0, 100).toString('hex'));
               resolve(audioBuffer);
             } else {
               const errorText = Buffer.concat(chunks).toString();
+              console.log(`[S2S] Error response body:`, errorText);
               reject(
                 new Error(`ElevenLabs S2S error: ${response.statusCode} - ${errorText}`)
               );
