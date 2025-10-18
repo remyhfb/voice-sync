@@ -30,30 +30,46 @@ VoiceSwap emphasizes processing transparency through visual feedback and real-ti
 
 ## Recent Changes (October 18, 2025)
 
-### Sync Labs API Integration Fix (Latest)
+### Sync Labs API Integration (Latest - October 18, 2025)
 **Problem:** Initial implementation tried to POST multipart file uploads directly to `/lipsync` endpoint, which returned 404 errors.
 
 **Root Cause:** Sync Labs uses an async job-based API, not direct file uploads.
 
-**Solution:** Refactored to use correct Sync Labs API flow:
-1. Upload time-stretched video and cleaned audio to GCS
-2. POST JSON with public URLs to `https://api.sync.so/video`
-3. Poll `GET /video/{jobId}` for completion (5-second intervals, max 10 minutes)
-4. Download result from returned `videoUrl`
+**Solution:** Implemented correct Sync Labs API workflow with secure file sharing:
 
-**Implementation:**
-- `SyncLabsService.lipSync()` now accepts URLs instead of file paths
-- Added `createJob()`, `pollJob()`, and `getJobStatus()` private methods
-- Pipeline uploads files to GCS first, generates public URLs, then calls Sync Labs
-- Returns final video URL after job completes
+**Architecture:**
+1. Upload time-stretched video and cleaned audio to GCS private storage
+2. Generate signed GET URLs (1-hour TTL) for secure, time-limited access
+3. POST JSON with signed URLs to `https://api.sync.so/video`
+4. Poll `GET /video/{jobId}` for completion (5-second intervals, max 10 minutes)
+5. Download result from returned `videoUrl`, upload to final storage
+6. Track credits used and store in job metadata
+
+**Security:**
+- Files remain private in GCS (no world-readable buckets)
+- Signed GET URLs expire after 1 hour
+- Sync Labs can download files securely without permanent access
+
+**Error Handling:**
+- Credits deducted captured and logged
+- Specific error messages from Sync Labs API propagated to logs
+- Step-by-step progress tracking during job polling
+- Timeout errors show duration in human-readable format
 
 **API Details:**
 - Base URL: `https://api.sync.so`
 - Create job: `POST /video` with JSON payload `{videoUrl, audioUrl, model, synergize}`
-- Check status: `GET /video/{jobId}` returns `{status, videoUrl, creditsDeducted}`
+- Check status: `GET /video/{jobId}` returns `{status, videoUrl, creditsDeducted, step}`
 - Authentication: `x-api-key` header
+- Model: `lipsync-2-pro` (premium model, ~$4-5/min)
 
-**User Benefit:** Sync Labs integration now works correctly with premium `lipsync-2-pro` model for highest quality lip-sync output.
+**Code Changes:**
+- `SyncLabsService.lipSync()` returns `{videoUrl, creditsDeducted}` with detailed logging
+- `ObjectStorageService.getSignedReadURL()` generates time-limited download URLs
+- Pipeline stores `syncLabsCredits` in job metadata for cost transparency
+- Enhanced error messages and progress visibility
+
+**Production Ready:** ✅ Architect approved - secure, robust, production-ready implementation.
 
 ### Automatic Silence Trimming
 **Problem:** Users always upload audio with silence padding at start/end. For example: 8-second video + 11-second audio (same content, but 2s silence at start, 1s at end).
