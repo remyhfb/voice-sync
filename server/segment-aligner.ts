@@ -304,26 +304,24 @@ export class SegmentAligner {
         alignment.userSegment.text
       );
 
-      // Calculate severity based on USER-ACTIONABLE issues only
-      // 1. Text mismatch - user said wrong words
-      // 2. Extreme time-stretching - our tech couldn't fully fix it (clamped)
+      // Calculate severity based on TIMING/PACE issues the user should fix
+      // Focus: How much does the user need to adjust their delivery speed?
       let severity: "critical" | "major" | "minor" | "perfect";
       
-      const wasClamped = appliedRatio !== ratio; // We had to clamp = user needs to re-record
-      const hasTextMismatch = textSimilarity < 0.7; // User said different words
+      const timingDeviation = Math.abs(ratio - 1.0);
       
-      if (wasClamped || textSimilarity < 0.3) {
-        // Critical: We couldn't fix it OR completely wrong words
-        severity = "critical";
-      } else if (hasTextMismatch) {
-        // Major: Said different words but we could still process
-        severity = "major";
-      } else if (textSimilarity < 0.9) {
-        // Minor: Slight word differences (filler words, etc)
-        severity = "minor";
-      } else {
-        // Perfect: Good match, all automatic fixes worked
+      if (timingDeviation < 0.05) {
+        // Within 5% - perfect timing
         severity = "perfect";
+      } else if (timingDeviation < 0.15) {
+        // 5-15% off - minor adjustment recommended
+        severity = "minor";
+      } else if (timingDeviation < 0.30) {
+        // 15-30% off - significant adjustment needed
+        severity = "major";
+      } else {
+        // >30% off - critical, needs re-recording with better timing
+        severity = "critical";
       }
 
       // Calculate speed change description
@@ -411,58 +409,46 @@ export class SegmentAligner {
       overallTiming = "perfect";
     }
 
-    // Generate recommendations - ONLY for user-actionable issues
+    // Generate recommendations - Focus on TIMING/PACE adjustments
     const recommendations: string[] = [];
     
-    // Count text mismatches and clamped segments
-    const textMismatches = segments.filter(s => s.textSimilarity < 0.7).length;
-    const clampedSegments = segments.filter(s => s.appliedRatio !== s.timeStretchRatio).length;
-    
-    if (criticalIssues === 0 && majorIssues === 0) {
-      recommendations.push("✅ Great job! Your voice acting matched the video well. All timing adjustments were handled automatically.");
+    if (criticalIssues === 0 && majorIssues === 0 && minorIssues === 0) {
+      recommendations.push("✅ Perfect timing! Your pace matches VEO's delivery almost exactly. No adjustments needed.");
+    } else if (criticalIssues === 0 && majorIssues === 0) {
+      recommendations.push("✅ Great timing! Only minor pace differences (all under 15%). Your delivery works well.");
     } else {
-      if (textMismatches > 0) {
-        recommendations.push(`⚠️ ${textMismatches} segment${textMismatches > 1 ? 's' : ''} have word mismatches - you said different words than VEO. Re-record these to match the script exactly.`);
+      if (criticalIssues > 0) {
+        recommendations.push(`🚨 ${criticalIssues} segment${criticalIssues > 1 ? 's have' : ' has'} significant timing issues (>30% off). Re-record these with pace much closer to VEO's delivery.`);
       }
       
-      if (clampedSegments > 0) {
-        recommendations.push(`🚨 ${clampedSegments} segment${clampedSegments > 1 ? 's' : ''} had extreme timing differences that couldn't be fully corrected. Re-record these with timing closer to VEO.`);
+      if (majorIssues > 0) {
+        recommendations.push(`⚠️ ${majorIssues} segment${majorIssues > 1 ? 's need' : ' needs'} pace adjustment (15-30% off). See details below for specific timing guidance.`);
       }
       
-      if (criticalIssues === 0 && majorIssues > 0) {
-        recommendations.push("ℹ️ Some minor word differences detected, but processing was successful. No action needed unless you want perfect text matching.");
-      }
+      recommendations.push("💡 Review the 'Top Issues to Fix' section below for specific timing adjustments needed for each segment.");
     }
 
-    // Identify top problem segments - ONLY ones with user-actionable issues
+    // Identify top problem segments - Focus on TIMING/PACE adjustments
     const problemSegments = segments
       .filter(s => s.severity === "critical" || s.severity === "major")
-      .sort((a, b) => {
-        // Prioritize text mismatches, then clamping issues
-        const aScore = (a.textSimilarity < 0.7 ? 100 : 0) + (a.appliedRatio !== a.timeStretchRatio ? 50 : 0);
-        const bScore = (b.textSimilarity < 0.7 ? 100 : 0) + (b.appliedRatio !== b.timeStretchRatio ? 50 : 0);
-        return bScore - aScore;
-      })
+      .sort((a, b) => Math.abs(b.timeStretchRatio - 1.0) - Math.abs(a.timeStretchRatio - 1.0))
       .slice(0, 5)
       .map(seg => {
         let issue: string;
         let recommendation: string;
 
-        const wasClamped = seg.appliedRatio !== seg.timeStretchRatio;
-        const hasTextMismatch = seg.textSimilarity < 0.7;
+        const timeDiff = seg.userTiming.duration - seg.veoTiming.duration;
+        const percentOff = Math.round(Math.abs(seg.timeStretchRatio - 1.0) * 100);
+        const secondsOff = Math.abs(timeDiff).toFixed(1);
 
-        if (hasTextMismatch && wasClamped) {
-          issue = `Wrong words AND extreme timing (${Math.abs(Math.round((seg.timeStretchRatio - 1) * 100))}% off, clamped to ${Math.abs(Math.round((seg.appliedRatio - 1) * 100))}%)`;
-          recommendation = "Re-record this line matching the exact words and timing of VEO";
-        } else if (hasTextMismatch) {
-          issue = `Said different words (${Math.round(seg.textSimilarity * 100)}% match)`;
-          recommendation = `Match VEO's script exactly: "${seg.veoText}"`;
-        } else if (wasClamped) {
-          issue = `Extreme timing difference (${Math.abs(Math.round((seg.timeStretchRatio - 1) * 100))}% off, clamped to ${Math.abs(Math.round((seg.appliedRatio - 1) * 100))}%)`;
-          recommendation = "Re-record with timing much closer to VEO's delivery";
+        if (seg.timeStretchRatio > 1.0) {
+          // User was slower than VEO
+          issue = `You're ${percentOff}% slower than VEO`;
+          recommendation = `Speed up your delivery by ${percentOff}%, shaving ${secondsOff} second${secondsOff === '1.0' ? '' : 's'} off`;
         } else {
-          issue = "Timing variance within acceptable range";
-          recommendation = "This was automatically corrected - no action needed";
+          // User was faster than VEO
+          issue = `You're ${percentOff}% faster than VEO`;
+          recommendation = `Slow down your delivery by ${percentOff}%, adding ${secondsOff} second${secondsOff === '1.0' ? '' : 's'}`;
         }
 
         return {

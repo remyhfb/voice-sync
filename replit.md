@@ -98,42 +98,42 @@ VoiceSwap emphasizes processing transparency through visual feedback and real-ti
 **User Benefit:** Upload audio with any amount of silence padding - system automatically finds and aligns the actual speech content with video.
 
 ### Alignment Report System
-**Feature:** Detailed post-processing reports for iterative voice recording improvement.
+**Feature:** Detailed post-processing reports focused on timing/pace adjustments for iterative voice recording improvement.
+
+**Guiding Principle:** Report ONLY highlights issues users need to fix with their voice acting - NOT things already handled automatically by technology.
 
 **Implementation:**
 1. **SegmentAligner Report Generation:**
-   - Per-segment analysis: timing deltas, text similarity, speed adjustments, severity classification
-   - Summary statistics: quality grade, overall timing trend, issue counts
-   - Actionable recommendations based on patterns
-   - Top 5 problem segments with specific improvement guidance
+   - Per-segment timing analysis: speed differences, duration deltas, severity classification
+   - Specific, actionable feedback: "Speed up by 20%, shaving 0.6 seconds off"
+   - Focus on PACE/TIMING issues (not text similarity - technology handles minor variations)
+   - Top 5 problem segments sorted by timing deviation magnitude
 
-2. **Severity Classification:**
-   - Perfect: ±5% timing accuracy
-   - Minor: 5-15% off (visual adjustment acceptable)
-   - Major: 15-30% off (noticeable but tolerable)
-   - Critical: >30% off (requires re-recording)
+2. **Severity Classification (Timing-Based):**
+   - Perfect: ±5% timing accuracy (no user action needed)
+   - Minor: 5-15% off (auto-corrected, no user action needed)
+   - Major: 15-30% off (recommend re-recording for better results)
+   - Critical: >30% off (requires re-recording with pace closer to VEO)
 
 3. **Report UI Components:**
-   - Quality dashboard with metrics and progress visualization
-   - Recommendations panel with emoji-coded priorities
-   - Problem segments with actionable fixes
+   - Quality dashboard with timing metrics and progress visualization
+   - Recommendations panel: "Great timing!" or "X segments need pace adjustment"
+   - Top Issues to Fix: Specific segments with timing guidance (e.g., "Speed up by 20%")
    - Expandable full segment breakdown
    - Displayed on Projects page for completed lip-sync jobs
 
 4. **Pipeline Integration:**
    - Report generated at alignment step (40-45%)
-   - Stored in job metadata
-   - Warnings logged for poor quality but processing continues
-   - Users can iterate: record → process → review report → improve → repeat
+   - Stored in job metadata for persistence
+   - Processing continues regardless of timing quality (users iterate post-processing)
+   - Users can iterate: record → process → review report → improve timing → repeat
 
-5. **Quality Thresholds (Updated for Realism):**
-   - Excellent: <10% avg deviation, no critical segments
-   - Good: <15% avg deviation, <30% critical segments
-   - Acceptable: <20% avg deviation, <50% critical segments (or <40% avg with <70% critical)
-   - Poor: >40% average deviation or >70% segments critical
-   - System is now more lenient since time-stretching handles adjustments well
+5. **Feedback Examples:**
+   - ✅ "Your pace for 'They say it's about the journey' was on target"
+   - ⚠️ "For 'I say it's snack time' you need to speed up by 20%, shaving 0.6 seconds off"
+   - 🚨 "For 'Not llama food' you're 35% slower - re-record with faster delivery"
 
-**User Benefit:** Clear, actionable feedback on timing accuracy enables iterative improvement of voice recordings for better lip-sync results.
+**User Benefit:** Clear, specific timing/pace guidance enables iterative improvement of voice recordings. Users see exactly which segments need speed adjustments and by how much.
 
 ### Lip-Sync Pipeline Implementation
 **Problem:** Users want to use their OWN voice acting (90% accurate) instead of AI-generated voices, with the system handling the final 10% timing/lip-sync adjustment.
