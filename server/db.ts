@@ -3,7 +3,11 @@ import { Pool, neonConfig } from "@neondatabase/serverless";
 import ws from "ws";
 import * as schema from "@shared/schema";
 
+// Configure WebSocket with TLS options
 neonConfig.webSocketConstructor = ws;
+neonConfig.wsProxy = (host) => `${host}?sslmode=require`;
+neonConfig.useSecureWebSocket = true;
+neonConfig.pipelineConnect = false;
 
 if (!process.env.DATABASE_URL) {
   throw new Error(
@@ -11,5 +15,8 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new Pool({ 
+  connectionString: process.env.DATABASE_URL
+});
+
 export const db = drizzle({ client: pool, schema });
