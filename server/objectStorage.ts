@@ -89,7 +89,8 @@ export class ObjectStorageService {
     const normalizedPath = this.normalizeObjectEntityPath(path);
     const privateDir = this.getPrivateObjectDir();
     const fullPath = `${privateDir}/${normalizedPath}`;
-    const [bucket, ...pathParts] = fullPath.split("/");
+    const pathSegments = fullPath.split("/").filter(s => s); // Remove empty strings
+    const [bucket, ...pathParts] = pathSegments;
     const objectPath = pathParts.join("/");
     const file = objectStorageClient.bucket(bucket).file(objectPath);
     const [exists] = await file.exists();
@@ -110,7 +111,8 @@ export class ObjectStorageService {
     const privateDir = this.getPrivateObjectDir();
     const objectId = randomUUID();
     const fullPath = `${privateDir}/${objectId}`;
-    const [bucket, ...pathParts] = fullPath.split("/");
+    const pathSegments = fullPath.split("/").filter(s => s); // Remove empty strings
+    const [bucket, ...pathParts] = pathSegments;
     const objectPath = pathParts.join("/");
     const file = objectStorageClient.bucket(bucket).file(objectPath);
 
@@ -136,7 +138,8 @@ export class ObjectStorageService {
     await setObjectAclPolicy(file, aclPolicy);
 
     const privateDir = this.getPrivateObjectDir();
-    const [privateDirBucket, ...privateDirPathParts] = privateDir.split("/");
+    const privateDirSegments = privateDir.split("/").filter(s => s); // Remove empty strings
+    const [privateDirBucket, ...privateDirPathParts] = privateDirSegments;
     const privateDirPath = privateDirPathParts.join("/");
 
     if (bucket === privateDirBucket && objectPath.startsWith(privateDirPath)) {

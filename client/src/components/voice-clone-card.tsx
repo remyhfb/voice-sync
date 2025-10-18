@@ -47,17 +47,37 @@ export function VoiceCloneCard({ voiceClone, onPlay, onUse, onDelete }: VoiceClo
           variant={voiceClone.status === "ready" ? "default" : voiceClone.status === "failed" ? "destructive" : "secondary"}
           className={cn(
             voiceClone.status === "ready" && "bg-chart-2 hover:bg-chart-2",
-            voiceClone.status === "cloning" && "gap-1"
+            (voiceClone.status === "training" || voiceClone.status === "cloning") && "gap-1"
           )}
           data-testid="badge-voice-status"
         >
-          {voiceClone.status === "cloning" && <Loader2 className="h-3 w-3 animate-spin" />}
+          {(voiceClone.status === "training" || voiceClone.status === "cloning") && <Loader2 className="h-3 w-3 animate-spin" />}
           {voiceClone.status}
         </Badge>
       </CardHeader>
       
       <CardContent>
-        {voiceClone.quality && (
+        {voiceClone.status === "training" && (
+          <div className="space-y-2" data-testid="training-progress">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Training Progress</span>
+              <span className="text-sm font-semibold">
+                {voiceClone.trainingProgress || 0}%
+              </span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-500"
+                style={{ width: `${voiceClone.trainingProgress || 0}%` }}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Training RVC model... This may take up to 10 minutes.
+            </p>
+          </div>
+        )}
+        
+        {voiceClone.quality && voiceClone.status === "ready" && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Voice Quality</span>

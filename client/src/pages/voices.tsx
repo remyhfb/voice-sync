@@ -31,6 +31,11 @@ export default function VoicesPage() {
 
   const { data: voices = [], isLoading } = useQuery<VoiceClone[]>({
     queryKey: ["/api/voices"],
+    refetchInterval: (query) => {
+      const voices = query.state.data;
+      const hasTrainingVoices = voices?.some((v) => v.status === "training");
+      return hasTrainingVoices ? 2000 : false; // Poll every 2 seconds if any voice is training
+    },
   });
 
   const createVoiceMutation = useMutation({

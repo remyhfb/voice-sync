@@ -155,6 +155,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.updateVoiceClone(voice.id, {
             rvcTrainingId: result.trainingId,
             status: "training",
+            trainingProgress: 5, // Initial progress
             samplePaths: [], // Clear temp paths after upload
           });
 
@@ -168,10 +169,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             const status = await replicate.getTrainingStatus(result.trainingId);
             
+            // Update progress incrementally (5% to 95%, then 100% on completion)
+            const progressIncrement = Math.min(5 + Math.floor((attempts / maxAttempts) * 90), 95);
+            await storage.updateVoiceClone(voice.id, {
+              trainingProgress: progressIncrement,
+            });
+            
             if (status.status === "succeeded" && status.modelUrl) {
               await storage.updateVoiceClone(voice.id, {
                 rvcModelUrl: status.modelUrl,
                 status: "ready",
+                trainingProgress: 100,
                 quality: 90 + Math.floor(Math.random() * 10),
               });
               console.log(`[RVC] Training completed for voice ${voice.id}`);
@@ -181,6 +189,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const errorMsg = status.error || "RVC training failed on Replicate";
               await storage.updateVoiceClone(voice.id, {
                 status: "failed",
+                trainingProgress: 0,
                 errorMessage: errorMsg,
               });
               console.error(`[RVC] Training failed for voice ${voice.id}:`, errorMsg);
@@ -196,6 +205,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const timeoutMessage = `Training timed out after ${maxAttempts * 10} seconds. RVC training may need more time.`;
             await storage.updateVoiceClone(voice.id, {
               status: "failed",
+              trainingProgress: 0,
               samplePaths: [], // Clear temp paths on timeout
               errorMessage: timeoutMessage,
             });
@@ -207,6 +217,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const errorMessage = `${error.message}${error.stack ? '\n' + error.stack.substring(0, 300) : ''}`;
           await storage.updateVoiceClone(voice.id, { 
             status: "failed",
+            trainingProgress: 0,
             samplePaths: [], // Clear temp paths on error
             errorMessage,
           });
