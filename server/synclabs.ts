@@ -55,7 +55,7 @@ export class SyncLabsService {
       formData.submit(
         {
           protocol: "https:",
-          host: "api.sync.so",
+          host: "api.synclabs.so",  // Correct hostname: synclabs not sync
           path: "/lipsync",
           method: "POST",
           headers: {
