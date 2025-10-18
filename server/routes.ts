@@ -123,11 +123,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Start RVC training in background
       (async () => {
+        const zipPath = `/tmp/uploads/${voice.id}_dataset.zip`;
         try {
           await storage.updateVoiceClone(voice.id, { status: "training" });
 
           // Create ZIP of audio samples
-          const zipPath = `/tmp/uploads/${voice.id}_dataset.zip`;
           await createZipFromFiles(samplePaths, zipPath);
 
           // Upload ZIP to object storage
@@ -154,11 +154,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.updateVoiceClone(voice.id, {
             rvcTrainingId: result.trainingId,
             status: "training",
+            samplePaths: [], // Clear temp paths after upload
           });
 
           // Poll training status
           let attempts = 0;
           const maxAttempts = 60; // 10 minutes max
+          let trainingCompleted = false;
           
           while (attempts < maxAttempts) {
             await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
@@ -172,26 +174,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 quality: 90 + Math.floor(Math.random() * 10),
               });
               console.log(`[RVC] Training completed for voice ${voice.id}`);
+              trainingCompleted = true;
               break;
             } else if (status.status === "failed") {
+              const errorMsg = status.error || "RVC training failed on Replicate";
               await storage.updateVoiceClone(voice.id, {
                 status: "failed",
+                errorMessage: errorMsg,
               });
-              console.error(`[RVC] Training failed for voice ${voice.id}:`, status.error);
+              console.error(`[RVC] Training failed for voice ${voice.id}:`, errorMsg);
+              trainingCompleted = true;
               break;
             }
             
             attempts++;
           }
 
-          // Cleanup
+          // Handle timeout - training exceeded max polling duration
+          if (!trainingCompleted) {
+            const timeoutMessage = `Training timed out after ${maxAttempts * 10} seconds. RVC training may need more time.`;
+            await storage.updateVoiceClone(voice.id, {
+              status: "failed",
+              samplePaths: [], // Clear temp paths on timeout
+              errorMessage: timeoutMessage,
+            });
+            console.error(`[RVC] ${timeoutMessage} (voice ${voice.id})`);
+          }
+        } catch (error: any) {
+          console.error("Error training RVC model:", error);
+          console.error("Stack trace:", error.stack);
+          const errorMessage = `${error.message}${error.stack ? '\n' + error.stack.substring(0, 300) : ''}`;
+          await storage.updateVoiceClone(voice.id, { 
+            status: "failed",
+            samplePaths: [], // Clear temp paths on error
+            errorMessage,
+          });
+        } finally {
+          // Always cleanup temp files
           await fs.unlink(zipPath).catch(() => {});
           for (const filePath of samplePaths) {
             await fs.unlink(filePath).catch(() => {});
           }
-        } catch (error: any) {
-          console.error("Error training RVC model:", error);
-          await storage.updateVoiceClone(voice.id, { status: "failed" });
         }
       })();
     } catch (error: any) {
@@ -255,10 +278,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Process video in background
       (async () => {
+        const extractedAudioPath = `/tmp/uploads/${job.id}_extracted.mp3`;
+        const convertedAudioPath = `/tmp/uploads/${job.id}_converted.mp3`;
+        const mergedVideoPath = `/tmp/uploads/${job.id}_final.mp4`;
+        
         try {
           // Step 1: Extract audio (0-30%)
           console.log(`[JOB ${job.id}] Extracting audio from video`);
-          const extractedAudioPath = `/tmp/uploads/${job.id}_extracted.mp3`;
           await ffmpegService.extractAudio(videoFile.path, extractedAudioPath);
           
           await storage.updateProcessingJob(job.id, {
@@ -300,7 +326,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Download converted audio
           const convertedResponse = await fetch(convertedAudioUrl);
           const convertedBuffer = Buffer.from(await convertedResponse.arrayBuffer());
-          const convertedAudioPath = `/tmp/uploads/${job.id}_converted.mp3`;
           await fs.writeFile(convertedAudioPath, convertedBuffer);
 
           await storage.updateProcessingJob(job.id, {
@@ -310,7 +335,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Step 4: Merge audio with video (80-100%)
           console.log(`[JOB ${job.id}] Merging converted audio with video`);
-          const mergedVideoPath = `/tmp/uploads/${job.id}_final.mp4`;
           await ffmpegService.mergeAudioVideo(
             videoFile.path,
             convertedAudioPath,
@@ -334,27 +358,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const finalVideoUrl = videoUploadUrl.split('?')[0];
 
           await storage.updateProcessingJob(job.id, {
+            videoPath: undefined, // Clear temp file path
+            extractedAudioPath: undefined, // Clear temp file path
+            convertedAudioPath: undefined, // Clear temp file path
             mergedVideoPath: finalVideoUrl,
             status: "completed",
             progress: 100,
           });
 
           console.log(`[JOB ${job.id}] Processing completed successfully`);
-
-          // Cleanup temp files
+        } catch (error: any) {
+          console.error(`[JOB ${job.id}] Processing failed:`, error);
+          console.error(`[JOB ${job.id}] Stack trace:`, error.stack);
+          await storage.updateProcessingJob(job.id, {
+            status: "failed",
+            videoPath: undefined, // Clear temp file paths on failure
+            extractedAudioPath: undefined,
+            convertedAudioPath: undefined,
+            metadata: {
+              ...job.metadata,
+              errorMessage: error.message,
+              errorStack: error.stack?.substring(0, 500), // First 500 chars of stack
+            },
+          });
+        } finally {
+          // Always cleanup temp files
           await fs.unlink(videoFile.path).catch(() => {});
           await fs.unlink(extractedAudioPath).catch(() => {});
           await fs.unlink(convertedAudioPath).catch(() => {});
           await fs.unlink(mergedVideoPath).catch(() => {});
-        } catch (error: any) {
-          console.error(`[JOB ${job.id}] Processing failed:`, error);
-          await storage.updateProcessingJob(job.id, {
-            status: "failed",
-            metadata: {
-              ...job.metadata,
-              errorMessage: error.message,
-            },
-          });
         }
       })();
     } catch (error: any) {

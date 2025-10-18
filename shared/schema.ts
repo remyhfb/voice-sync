@@ -12,6 +12,7 @@ export const voiceClones = pgTable("voice_clones", {
   samplePaths: jsonb("sample_paths").$type<string[]>().notNull().default([]),
   status: text("status").notNull().default("pending"), // pending, training, ready, failed
   quality: integer("quality"), // 0-100 similarity score
+  errorMessage: text("error_message"), // Error details for failed training
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
