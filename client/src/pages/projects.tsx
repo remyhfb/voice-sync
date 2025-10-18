@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { ProcessingJob } from "@shared/schema";
+import { AlignmentReport } from "@/components/AlignmentReport";
+import { useState } from "react";
 
 export default function ProjectsPage() {
   const { data: projects = [], isLoading } = useQuery<ProcessingJob[]>({
@@ -58,104 +60,110 @@ export default function ProjectsPage() {
           </p>
         </div>
       ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="space-y-6">
           {projects.map((project) => (
-            <Card key={project.id} className="hover-elevate" data-testid={`card-project-${project.id}`}>
-              <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
-                <div className="flex items-start gap-3 min-w-0 flex-1">
-                  <div className="flex h-10 w-10 items-center justify-center rounded bg-muted flex-shrink-0">
-                    <Video className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold font-mono text-sm truncate" data-testid="text-video-name">
-                      {project.metadata?.videoFileName || "Video"}
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      {project.type.replace("_", " ")}
-                    </p>
-                  </div>
-                </div>
-                {getStatusIcon(project.status)}
-              </CardHeader>
-
-              <CardContent className="space-y-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Status</span>
-                  <Badge
-                    variant={
-                      project.status === "completed"
-                        ? "default"
-                        : project.status === "failed"
-                        ? "destructive"
-                        : "secondary"
-                    }
-                    className={cn(
-                      project.status === "completed" && "bg-chart-2 hover:bg-chart-2",
-                      "capitalize"
-                    )}
-                  >
-                    {project.status}
-                  </Badge>
-                </div>
-
-                {project.status === "processing" && (
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Progress</span>
-                      <span>{project.progress}%</span>
+            <div key={project.id} className="space-y-4">
+              <Card className="hover-elevate" data-testid={`card-project-${project.id}`}>
+                <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
+                    <div className="flex h-10 w-10 items-center justify-center rounded bg-muted flex-shrink-0">
+                      <Video className="h-5 w-5 text-muted-foreground" />
                     </div>
-                    <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                      <div
-                        className="h-full bg-primary transition-all"
-                        style={{ width: `${project.progress}%` }}
-                      />
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold font-mono text-sm truncate" data-testid="text-video-name">
+                        {project.metadata?.videoFileName || "Video"}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        {project.type.replace("_", " ")}
+                      </p>
                     </div>
                   </div>
-                )}
+                  {getStatusIcon(project.status)}
+                </CardHeader>
 
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Created</span>
-                  <span className="text-xs">
-                    {new Date(project.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-
-                {project.metadata?.videoDuration && (
+                <CardContent className="space-y-3">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Duration</span>
-                    <span className="text-xs font-mono">
-                      {formatDuration(project.metadata.videoDuration)}
+                    <span className="text-muted-foreground">Status</span>
+                    <Badge
+                      variant={
+                        project.status === "completed"
+                          ? "default"
+                          : project.status === "failed"
+                          ? "destructive"
+                          : "secondary"
+                      }
+                      className={cn(
+                        project.status === "completed" && "bg-chart-2 hover:bg-chart-2",
+                        "capitalize"
+                      )}
+                    >
+                      {project.status}
+                    </Badge>
+                  </div>
+
+                  {project.status === "processing" && (
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Progress</span>
+                        <span>{project.progress}%</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full bg-primary transition-all"
+                          style={{ width: `${project.progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Created</span>
+                    <span className="text-xs">
+                      {new Date(project.createdAt).toLocaleDateString()}
                     </span>
                   </div>
-                )}
-              </CardContent>
 
-              <CardFooter className="pt-4 border-t gap-2">
-                {project.status === "completed" && (
-                  <>
-                    <Button variant="outline" size="sm" className="flex-1" asChild>
-                      <a href="/">View Details</a>
+                  {project.metadata?.videoDuration && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Duration</span>
+                      <span className="text-xs font-mono">
+                        {formatDuration(project.metadata.videoDuration)}
+                      </span>
+                    </div>
+                  )}
+                </CardContent>
+
+                <CardFooter className="pt-4 border-t gap-2">
+                  {project.status === "completed" && (
+                    <>
+                      <Button variant="outline" size="sm" className="flex-1" asChild>
+                        <a href="/">Create New</a>
+                      </Button>
+                      <Button size="sm" className="flex-1" asChild>
+                        <a href={project.mergedVideoPath || "#"} download data-testid="button-download">
+                          Download
+                        </a>
+                      </Button>
+                    </>
+                  )}
+                  {project.status === "processing" && (
+                    <Button variant="outline" size="sm" className="w-full" disabled>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Processing...
                     </Button>
-                    <Button size="sm" className="flex-1" asChild>
-                      <a href={project.generatedAudioPath || "#"} download>
-                        Download
-                      </a>
+                  )}
+                  {project.status === "failed" && (
+                    <Button variant="outline" size="sm" className="w-full" asChild>
+                      <a href="/">Retry</a>
                     </Button>
-                  </>
-                )}
-                {project.status === "processing" && (
-                  <Button variant="outline" size="sm" className="w-full" disabled>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Processing...
-                  </Button>
-                )}
-                {project.status === "failed" && (
-                  <Button variant="outline" size="sm" className="w-full" asChild>
-                    <a href="/">Retry</a>
-                  </Button>
-                )}
-              </CardFooter>
-            </Card>
+                  )}
+                </CardFooter>
+              </Card>
+
+              {project.status === "completed" && project.metadata?.alignmentReport && (
+                <AlignmentReport report={project.metadata.alignmentReport} />
+              )}
+            </div>
           ))}
         </div>
       )}

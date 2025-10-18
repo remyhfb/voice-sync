@@ -30,7 +30,38 @@ VoiceSwap emphasizes processing transparency through visual feedback and real-ti
 
 ## Recent Changes (October 18, 2025)
 
-### Lip-Sync Pipeline Implementation (Latest)
+### Alignment Report System (Latest)
+**Feature:** Detailed post-processing reports for iterative voice recording improvement.
+
+**Implementation:**
+1. **SegmentAligner Report Generation:**
+   - Per-segment analysis: timing deltas, text similarity, speed adjustments, severity classification
+   - Summary statistics: quality grade, overall timing trend, issue counts
+   - Actionable recommendations based on patterns
+   - Top 5 problem segments with specific improvement guidance
+
+2. **Severity Classification:**
+   - Perfect: ±5% timing accuracy
+   - Minor: 5-15% off (visual adjustment acceptable)
+   - Major: 15-30% off (noticeable but tolerable)
+   - Critical: >30% off (requires re-recording)
+
+3. **Report UI Components:**
+   - Quality dashboard with metrics and progress visualization
+   - Recommendations panel with emoji-coded priorities
+   - Problem segments with actionable fixes
+   - Expandable full segment breakdown
+   - Displayed on Projects page for completed lip-sync jobs
+
+4. **Pipeline Integration:**
+   - Report generated at alignment step (40-45%)
+   - Stored in job metadata
+   - Pipeline aborts if quality is "poor"
+   - Users can iterate: record → process → review report → improve → repeat
+
+**User Benefit:** Clear, actionable feedback on timing accuracy enables iterative improvement of voice recordings for better lip-sync results.
+
+### Lip-Sync Pipeline Implementation
 **Problem:** Users want to use their OWN voice acting (90% accurate) instead of AI-generated voices, with the system handling the final 10% timing/lip-sync adjustment.
 
 **Solution:** Implemented hybrid video manipulation + AI lip-sync pipeline:
