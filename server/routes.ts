@@ -380,13 +380,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch (error: any) {
           console.error(`[JOB ${job.id}] Processing failed:`, error);
           console.error(`[JOB ${job.id}] Stack trace:`, error.stack);
+          
+          // Get latest job data to preserve any metadata updates
+          const latestJob = await storage.getProcessingJob(job.id);
           await storage.updateProcessingJob(job.id, {
             status: "failed",
             videoPath: null, // Clear temp file paths on failure
             extractedAudioPath: null,
             convertedAudioPath: null,
             metadata: {
-              ...job.metadata,
+              ...(latestJob?.metadata || job.metadata),
               errorMessage: error.message,
               errorStack: error.stack?.substring(0, 500), // First 500 chars of stack
             },
@@ -620,13 +623,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch (error: any) {
           console.error(`[JOB ${job.id}] [BARK] Error:`, error.message);
           console.error(`[JOB ${job.id}] [BARK] Stack trace:`, error.stack);
+          
+          // Get latest job data to preserve any metadata updates
+          const latestJob = await storage.getProcessingJob(job.id);
           await storage.updateProcessingJob(job.id, {
             status: "failed",
             videoPath: null,
             extractedAudioPath: null,
             convertedAudioPath: null,
             metadata: {
-              ...job.metadata,
+              ...(latestJob?.metadata || job.metadata),
               errorMessage: error.message,
               errorStack: error.stack?.substring(0, 500),
             },
@@ -867,13 +873,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const objectId = urlParts[urlParts.length - 1];
           const finalVideoPath = `/objects/uploads/${objectId}`;
 
+          // Get latest job data to preserve alignment report and other metadata
+          const latestJob = await storage.getProcessingJob(job.id);
+          if (!latestJob) {
+            throw new Error("Job not found during final update");
+          }
+
           await storage.updateProcessingJob(job.id, {
             videoPath: null,
             mergedVideoPath: finalVideoPath,
             status: "completed",
             progress: 100,
             metadata: {
-              ...job.metadata,
+              ...latestJob.metadata,
               syncLabsCredits: syncLabsResult.creditsDeducted,
             } as any, // metadata is JSONB, allows dynamic properties
           });
@@ -882,11 +894,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch (error: any) {
           console.error(`[JOB ${job.id}] [LIPSYNC] Error:`, error.message);
           console.error(`[JOB ${job.id}] [LIPSYNC] Stack:`, error.stack);
+          
+          // Get latest job data to preserve alignment report even on failure
+          const latestJob = await storage.getProcessingJob(job.id);
           await storage.updateProcessingJob(job.id, {
             status: "failed",
             videoPath: null,
             metadata: {
-              ...job.metadata,
+              ...(latestJob?.metadata || job.metadata),
               errorMessage: error.message,
               errorStack: error.stack?.substring(0, 500),
             },
