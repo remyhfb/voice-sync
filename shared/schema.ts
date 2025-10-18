@@ -33,6 +33,7 @@ export const processingJobs = pgTable("processing_jobs", {
     audioFormat?: string;
     convertedAudioDuration?: number;
     errorMessage?: string;
+    errorStack?: string;
   }>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

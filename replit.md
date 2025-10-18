@@ -2,7 +2,7 @@
 
 ## Overview
 
-VoiceSwap is an AI-powered voice conversion application that enables users to train RVC (Retrieval-based Voice Conversion) models from audio samples and convert video audio to match the trained voice while preserving perfect lip-sync timing. The application provides a professional interface for managing voice models, processing videos with voice conversion, and downloading perfectly synced results.
+VoiceSwap is an AI-powered voice conversion application that enables users to clone voices using ElevenLabs and convert video audio using Speech-to-Speech (S2S) technology while preserving perfect lip-sync timing. The application provides a professional interface for managing voice clones, processing videos with voice conversion, and downloading perfectly synced results.
 
 ## User Preferences
 
@@ -72,12 +72,12 @@ Preferred communication style: Simple, everyday language.
 
 ### External Dependencies
 
-**Replicate API (RVC)**
-- Voice model training from audio samples using RVC (Retrieval-based Voice Conversion)
-- Voice-to-voice conversion that preserves timing and prosody perfectly
-- Training cost: ~$0.11 per model (~2 minutes)
-- Conversion cost: ~$0.002 per video (~8 seconds)
-- Maintains exact lip-sync with original video
+**ElevenLabs Speech-to-Speech API**
+- Voice cloning from audio samples (instant, no training wait time)
+- Speech-to-Speech conversion that preserves timing and prosody perfectly
+- Transforms existing audio to match cloned voice while maintaining exact timing
+- Maintains perfect lip-sync with original video
+- Background noise removal built-in
 
 **FFmpeg**
 - Audio extraction from video files
@@ -121,29 +121,28 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (October 18, 2025)
 
-### Complete Pivot to RVC Voice Conversion (Completed)
-**Problem Solved:** ElevenLabs TTS generated entirely new audio from text, which changed timing and broke lip-sync. The "uncanny valley" effect made videos unusable.
+### Complete Pivot to ElevenLabs Speech-to-Speech (October 18, 2025)
+**Problem Solved:** Replicate's RVC training endpoint became completely disabled ("Version not trainable" errors across all versions). Previous TTS approach also broke lip-sync by generating entirely new audio.
 
-**Solution:** Replaced the entire pipeline with RVC (Retrieval-based Voice Conversion), which transforms the original audio to match the cloned voice while preserving exact timing/prosody - resulting in perfect lip-sync.
+**Solution:** Migrated to ElevenLabs Speech-to-Speech API, which provides:
+- Instant voice cloning (no multi-minute training wait)
+- Speech-to-Speech conversion that preserves exact timing/prosody
+- Perfect lip-sync preservation
+- Production-ready, reliable API
 
 **Changes Made:**
-- Created Replicate RVC service for model training and voice conversion
-- Updated database schema: removed `elevenLabsVoiceId`, added `rvcModelUrl`, `rvcTrainingId`, and `errorMessage`
-- Removed transcription/editing pipeline (no longer needed for voice conversion)
-- Rebuilt voice training route with proper timeout handling and error persistence
-- Rebuilt video processing route with RVC voice conversion
-- Added comprehensive error handling with try/finally cleanup for all temp files
-- Updated frontend to remove transcription editor and show RVC pipeline
-- Added error message display for failed voice training
+- Created ElevenLabs service with `speechToSpeech()` method for voice conversion
+- Updated database schema: replaced `rvcModelUrl` and `rvcTrainingId` with `elevenLabsVoiceId`
+- Updated voice training route to use ElevenLabs voice cloning (instant completion)
+- Updated video processing route to use ElevenLabs S2S instead of RVC
+- Updated frontend to reference ElevenLabs instead of RVC
+- Added `errorStack` field to job metadata for better error tracking
 
-**Reliability Features:**
-- Explicit timeout handling (10 minutes) with failure marking and error messages
-- Try/finally cleanup ensures temp files are always deleted
-- Error persistence in database for frontend visibility
-- Stack trace logging for operational debugging
-- Temp file path cleanup from job records after processing
-
-**Architecture Review:** Passed architect review - production-ready ✅
+**Technical Implementation:**
+- Voice cloning: Upload audio samples → Get voice ID (seconds, not minutes)
+- Video processing: Extract audio → S2S conversion → Merge audio back to video
+- Progress tracking: 0-30% (extraction) → 30-80% (S2S) → 80-100% (merge)
+- Automatic cleanup of temp files with try/finally blocks
 
 ## Previous Changes
 
@@ -183,9 +182,9 @@ Preferred communication style: Simple, everyday language.
 
 ### Required Environment Variables
 
-**REPLICATE_API_TOKEN** (Required)
-- Obtain from https://replicate.com/
-- Used for RVC model training and voice conversion
+**ELEVENLABS_API_KEY** (Required)
+- Obtain from https://elevenlabs.io/
+- Used for voice cloning and speech-to-speech conversion
 - Without this key, voice creation and processing will return 503 errors
 
 **Object Storage** (Auto-configured by Replit)
@@ -196,14 +195,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Current Status
 
-The application is rebuilt with RVC voice conversion for perfect lip-sync:
-- ✅ RVC voice model training from audio samples
+The application uses ElevenLabs Speech-to-Speech for perfect lip-sync:
+- ✅ Instant voice cloning with ElevenLabs
 - ✅ Video upload and audio extraction with FFmpeg
-- ✅ Voice-to-voice conversion (preserves timing perfectly)
+- ✅ Speech-to-Speech conversion (preserves timing perfectly)
 - ✅ Audio-video merging with perfect lip-sync
 - ✅ Object storage for file persistence
 - ✅ Real-time progress tracking
 - ✅ Professional UI with dark theme and purple accent
-- ✅ Replicate API integration
+- ✅ ElevenLabs API integration
 
-**Key Difference:** Instead of text-to-speech (which changes timing), we use voice conversion that transforms the audio while keeping the exact same timing as the original - resulting in perfect lip-sync!
+**Key Technology:** Speech-to-Speech conversion transforms the existing audio to match your cloned voice while preserving the exact same timing, pauses, and delivery - resulting in perfect lip-sync!

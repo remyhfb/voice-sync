@@ -63,8 +63,8 @@ export default function VoicesPage() {
       setVoiceName("");
       setAudioSamples([]);
       toast({
-        title: "Voice model training started",
-        description: "Your RVC voice model is being trained. This may take up to 10 minutes.",
+        title: "Voice cloning started",
+        description: "Your voice is being cloned with ElevenLabs. This usually completes in seconds.",
       });
     },
     onError: (error: Error) => {
@@ -98,8 +98,8 @@ export default function VoicesPage() {
 
   const handlePlayVoice = async (voiceId: string) => {
     toast({
-      title: "RVC Voice Model",
-      description: "To test this voice, convert a video in the 'Create' tab. RVC models preserve perfect lip-sync timing!",
+      title: "Voice Clone Ready",
+      description: "To test this voice, convert a video in the 'Create' tab. ElevenLabs Speech-to-Speech preserves perfect lip-sync timing!",
     });
   };
 
@@ -124,7 +124,7 @@ export default function VoicesPage() {
             Voice Library
           </h1>
           <p className="text-lg text-muted-foreground">
-            Train RVC voice models that preserve perfect timing and lip-sync
+            Clone voices with ElevenLabs Speech-to-Speech for perfect timing and lip-sync
           </p>
         </div>
 

@@ -72,7 +72,7 @@ export function VoiceCloneCard({ voiceClone, onPlay, onUse, onDelete }: VoiceClo
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Training RVC model... This may take up to 10 minutes.
+              Cloning voice with ElevenLabs... Usually completes in seconds.
             </p>
           </div>
         )}
