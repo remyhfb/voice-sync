@@ -16,7 +16,13 @@ export class FFmpegService {
       let duration = 0;
 
       ffmpeg(videoPath)
-        .outputOptions(["-vn", "-acodec", "libmp3lame", "-ab", "192k"])
+        .outputOptions([
+          "-vn",              // No video
+          "-acodec", "libmp3lame",  // MP3 codec
+          "-ab", "192k",      // 192 kbps bitrate
+          "-ar", "44100",     // 44.1kHz sample rate (ElevenLabs standard)
+          "-ac", "1"          // Mono (single channel)
+        ])
         .output(outputPath)
         .on("codecData", (data) => {
           const durationStr = data.duration;
