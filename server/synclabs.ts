@@ -56,7 +56,7 @@ export class SyncLabsService {
         {
           protocol: "https:",
           host: "api.sync.so",
-          path: "/v2/lipsync",
+          path: "/lipsync",
           method: "POST",
           headers: {
             "x-api-key": this.apiKey,
