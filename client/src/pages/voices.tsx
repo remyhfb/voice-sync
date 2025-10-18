@@ -58,8 +58,8 @@ export default function VoicesPage() {
       setVoiceName("");
       setAudioSamples([]);
       toast({
-        title: "Voice clone created",
-        description: "Your voice is being cloned with ElevenLabs AI. This may take a minute.",
+        title: "Voice model training started",
+        description: "Your RVC voice model is being trained. This may take up to 10 minutes.",
       });
     },
     onError: (error: Error) => {
@@ -92,60 +92,10 @@ export default function VoicesPage() {
   });
 
   const handlePlayVoice = async (voiceId: string) => {
-    try {
-      toast({
-        title: "Generating preview...",
-        description: "Creating voice sample with ElevenLabs",
-      });
-
-      const response = await fetch(`/api/voices/${voiceId}/preview`, {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to generate preview");
-      }
-
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(new Blob([audioBlob], { type: 'audio/mpeg' }));
-      
-      // Use inline audio element to avoid Replit production blob: URL routing issues
-      audioElement.src = audioUrl;
-      
-      try {
-        await audioElement.play();
-        
-        toast({
-          title: "Playing preview",
-          description: "Listen to your cloned voice sample",
-        });
-        
-        // Cleanup after playback
-        audioElement.onended = () => {
-          URL.revokeObjectURL(audioUrl);
-        };
-      } catch (playError: any) {
-        // If autoplay is blocked, provide download option
-        const link = document.createElement('a');
-        link.href = audioUrl;
-        link.download = 'voice-preview.mp3';
-        link.click();
-        
-        toast({
-          title: "Preview downloaded",
-          description: "Audio file saved to your downloads",
-        });
-        
-        setTimeout(() => URL.revokeObjectURL(audioUrl), 1000);
-      }
-    } catch (error: any) {
-      console.error("Audio preview error:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to generate voice preview",
-        variant: "destructive",
-      });
-    }
+    toast({
+      title: "RVC Voice Model",
+      description: "To test this voice, convert a video in the 'Create' tab. RVC models preserve perfect lip-sync timing!",
+    });
   };
 
   const handleCreateVoice = () => {
@@ -169,7 +119,7 @@ export default function VoicesPage() {
             Voice Library
           </h1>
           <p className="text-lg text-muted-foreground">
-            Manage your AI voice clones with authentic tone and emotion
+            Train RVC voice models that preserve perfect timing and lip-sync
           </p>
         </div>
 

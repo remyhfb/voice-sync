@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { FileUploadZone } from "@/components/file-upload-zone";
 import { ProcessingTimeline, ProcessingStep } from "@/components/processing-timeline";
-import { TranscriptionEditor } from "@/components/transcription-editor";
 import { DownloadSection } from "@/components/download-section";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,7 +16,6 @@ export default function CreatePage() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>("");
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const { toast } = useToast();
 
   const { data: voices = [], isLoading: voicesLoading } = useQuery<VoiceClone[]>({
@@ -62,61 +60,13 @@ export default function CreatePage() {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       toast({
         title: "Processing started",
-        description: "Your video is being processed. This may take a few minutes.",
+        description: "Your video is being processed with RVC voice conversion.",
       });
     },
     onError: (error: Error) => {
       toast({
         title: "Error",
         description: error.message || "Failed to start processing",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const saveTranscriptionMutation = useMutation({
-    mutationFn: async (data: { jobId: string; transcription: string }) => {
-      return apiRequest("PATCH", `/api/jobs/${data.jobId}/transcription`, {
-        transcription: data.transcription,
-      });
-    },
-    onSuccess: () => {
-      if (currentJobId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/jobs", currentJobId] });
-      }
-      setHasUnsavedChanges(false);
-      toast({
-        title: "Transcription saved",
-        description: "Your edited text will be used for voice generation",
-      });
-    },
-    onError: (error: Error) => {
-      setHasUnsavedChanges(true);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to save transcription",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const continueProcessingMutation = useMutation({
-    mutationFn: async (jobId: string) => {
-      return apiRequest("POST", `/api/jobs/${jobId}/continue`, {});
-    },
-    onSuccess: () => {
-      if (currentJobId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/jobs", currentJobId] });
-      }
-      toast({
-        title: "Processing resumed",
-        description: "Generating voice audio with your transcription",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to continue processing",
         variant: "destructive",
       });
     },
@@ -129,252 +79,188 @@ export default function CreatePage() {
   };
 
   const handleStartProcessing = () => {
-    if (!videoFile || !selectedVoiceId) return;
-    processVideoMutation.mutate({ videoFile, voiceCloneId: selectedVoiceId });
-  };
-
-  const getProcessingSteps = (): ProcessingStep[] => {
-    if (!currentJob) {
-      return [
-        {
-          id: "upload",
-          label: "Upload Video",
-          status: videoFile ? "completed" : "pending",
-        },
-        {
-          id: "extract",
-          label: "Extract Audio",
-          status: "pending",
-        },
-        {
-          id: "transcribe",
-          label: "Transcribe Speech",
-          status: "pending",
-        },
-        {
-          id: "review",
-          label: "Review & Edit",
-          status: "pending",
-        },
-        {
-          id: "generate",
-          label: "Generate Cloned Voice",
-          status: "pending",
-        },
-        {
-          id: "download",
-          label: "Ready to Download",
-          status: "pending",
-        },
-      ];
+    if (!videoFile || !selectedVoiceId) {
+      toast({
+        title: "Missing information",
+        description: "Please upload a video and select a voice clone",
+        variant: "destructive",
+      });
+      return;
     }
 
-    return [
-      {
-        id: "upload",
-        label: "Upload Video",
-        status: "completed",
-      },
-      {
-        id: "extract",
-        label: "Extract Audio",
-        status: currentJob.progress >= 30 ? "completed" : currentJob.progress > 10 ? "processing" : "pending",
-        progress: currentJob.progress < 30 ? currentJob.progress : undefined,
-      },
-      {
-        id: "transcribe",
-        label: "Transcribe Speech",
-        status: currentJob.progress >= 60 || currentJob.status === "awaiting_review" ? "completed" : currentJob.progress > 30 ? "processing" : "pending",
-        progress: currentJob.progress >= 30 && currentJob.progress < 60 ? currentJob.progress : undefined,
-      },
-      {
-        id: "review",
-        label: "Review & Edit",
-        status: currentJob.status === "awaiting_review" ? "processing" : currentJob.progress > 60 ? "completed" : "pending",
-      },
-      {
-        id: "generate",
-        label: "Generate Cloned Voice",
-        status: currentJob.progress >= 100 ? "completed" : currentJob.progress > 60 ? "processing" : "pending",
-        progress: currentJob.progress >= 60 && currentJob.progress < 100 ? currentJob.progress : undefined,
-      },
-      {
-        id: "download",
-        label: "Ready to Download",
-        status: currentJob.status === "completed" ? "completed" : "pending",
-      },
-    ];
+    processVideoMutation.mutate({
+      videoFile,
+      voiceCloneId: selectedVoiceId,
+    });
+  };
+
+  const handleReset = () => {
+    setVideoFile(null);
+    setSelectedVoiceId("");
+    setCurrentJobId(null);
   };
 
   const readyVoices = voices.filter((v) => v.status === "ready");
 
+  const getProcessingSteps = (): ProcessingStep[] => {
+    const job = currentJob;
+    if (!job) return [];
+
+    const steps: ProcessingStep[] = [
+      {
+        id: "extraction",
+        label: "Audio Extraction",
+        status: job.progress >= 30 ? "completed" : job.status === "processing" ? "processing" : "pending",
+        estimatedTime: "~30 seconds",
+      },
+      {
+        id: "conversion",
+        label: "Voice Conversion (RVC preserves timing perfectly)",
+        status: job.progress >= 80 ? "completed" : job.progress >= 30 ? "processing" : "pending",
+        estimatedTime: "~2 minutes",
+      },
+      {
+        id: "merging",
+        label: "Video Merging",
+        status: job.status === "completed" ? "completed" : job.progress >= 80 ? "processing" : "pending",
+        estimatedTime: "~30 seconds",
+      },
+    ];
+
+    return steps;
+  };
+
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-2">
-          Create Voice Clone
-        </h1>
-        <p className="text-lg text-muted-foreground">
-          Upload your video and replace synthetic voices with authentic cloned audio
-        </p>
-      </div>
-
-      <div className="grid lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
-          <Card className="p-6">
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <h2 className="text-xl font-semibold">Step 1: Upload Video</h2>
-                <p className="text-sm text-muted-foreground">
-                  Upload the video file that contains the voice you want to replace
-                </p>
-              </div>
-
-              <FileUploadZone
-                accept="video/*"
-                maxSize={500 * 1024 * 1024}
-                onFilesSelected={handleVideoUpload}
-                title="Upload Video File"
-                description="Drop your video file here or click to browse. Supports MP4, MOV, AVI, and more."
-                icon="video"
-                disabled={processVideoMutation.isPending || currentJob?.status === "processing"}
-              />
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <h2 className="text-xl font-semibold">Step 2: Select Voice Clone</h2>
-                <p className="text-sm text-muted-foreground">
-                  Choose which voice to use for the replacement audio
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                {voicesLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : readyVoices.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-sm text-muted-foreground mb-2">
-                      No voice clones available yet
-                    </p>
-                    <Button variant="ghost" asChild>
-                      <a href="/voices">Create your first voice clone</a>
-                    </Button>
-                  </div>
-                ) : (
-                  <Select value={selectedVoiceId} onValueChange={setSelectedVoiceId}>
-                    <SelectTrigger data-testid="select-voice-clone">
-                      <SelectValue placeholder="Select a voice clone" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {readyVoices.map((voice) => (
-                        <SelectItem key={voice.id} value={voice.id}>
-                          {voice.name} ({voice.quality}% quality)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Sparkles className="h-4 w-4" />
-                  <span>Voice clones capture emotion, tone, and natural inflection</span>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          {currentJob?.transcription && (
-            <>
-              <TranscriptionEditor
-                transcription={currentJob.editedTranscription || currentJob.transcription}
-                disabled={currentJob.status !== "awaiting_review"}
-                onSave={(text) => {
-                  if (currentJob.id) {
-                    saveTranscriptionMutation.mutate({ jobId: currentJob.id, transcription: text });
-                  }
-                }}
-                onHasUnsavedChanges={setHasUnsavedChanges}
-              />
-              
-              {currentJob.status === "awaiting_review" && (
-                <Card className="p-6 bg-primary/5 border-primary/20">
-                  <div className="flex items-start gap-4">
-                    <div className="flex-1">
-                      <h3 className="font-semibold mb-1">Review Complete?</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {hasUnsavedChanges
-                          ? "You have unsaved changes. Please save before continuing."
-                          : currentJob.editedTranscription 
-                          ? "You've edited the transcription. Click continue to generate voice audio with your changes."
-                          : "Review the transcription above. You can edit it or continue with the original text."}
-                      </p>
-                    </div>
-                    <Button
-                      onClick={() => currentJob.id && continueProcessingMutation.mutate(currentJob.id)}
-                      disabled={continueProcessingMutation.isPending || hasUnsavedChanges || saveTranscriptionMutation.isPending}
-                      data-testid="button-continue-processing"
-                    >
-                      {continueProcessingMutation.isPending ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Starting...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="h-4 w-4 mr-2" />
-                          Continue
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </Card>
-              )}
-            </>
-          )}
-
-          <Separator />
-
-          <Button
-            size="lg"
-            className="w-full"
-            disabled={!videoFile || !selectedVoiceId || processVideoMutation.isPending || currentJob?.status === "processing"}
-            onClick={handleStartProcessing}
-            data-testid="button-start-processing"
-          >
-            {processVideoMutation.isPending || currentJob?.status === "processing" ? (
-              <>
-                <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-5 w-5 mr-2" />
-                Start Voice Replacement
-              </>
-            )}
-          </Button>
+    <div className="min-h-screen bg-background">
+      <div className="max-w-4xl mx-auto p-8">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold mb-2">
+            Create Voice Swap
+          </h1>
+          <p className="text-muted-foreground">
+            Upload your video and choose a voice clone. RVC technology preserves perfect lip-sync!
+          </p>
         </div>
 
-        <div className="space-y-6">
-          <ProcessingTimeline steps={getProcessingSteps()} />
-          
-          {currentJob?.status === "completed" && currentJob.generatedAudioPath && (
-            <DownloadSection
-              audioUrl={currentJob.generatedAudioPath}
-              audioFormat={currentJob.metadata?.generatedAudioFormat?.toUpperCase() || "MP3"}
-              audioDuration={currentJob.metadata?.generatedAudioDuration}
-              audioSize={0}
-              videoUrl={currentJob.mergedVideoPath}
-              transcription={currentJob.transcription || undefined}
-              metadata={currentJob.metadata || undefined}
+        {!currentJob && (
+          <Card className="p-6 mb-8">
+            <h2 className="text-xl font-semibold mb-4">
+              Step 1: Upload Video
+            </h2>
+            <FileUploadZone
+              onFilesSelected={handleVideoUpload}
+              accept="video/*"
+              multiple={false}
+              maxSize={100 * 1024 * 1024}
+              title="Upload Video"
+              description="Select or drag a video file (MP4, MOV, AVI, WebM)"
+              icon="video"
             />
-          )}
-        </div>
+            {videoFile && (
+              <div className="mt-4 p-3 bg-accent/20 rounded-md">
+                <p className="text-sm font-mono">
+                  Selected: {videoFile.name} ({(videoFile.size / (1024 * 1024)).toFixed(2)} MB)
+                </p>
+              </div>
+            )}
+
+            <Separator className="my-6" />
+
+            <h2 className="text-xl font-semibold mb-4">
+              Step 2: Select Voice Clone
+            </h2>
+            <div className="space-y-3">
+              <Select
+                value={selectedVoiceId}
+                onValueChange={setSelectedVoiceId}
+                disabled={voicesLoading || readyVoices.length === 0}
+              >
+                <SelectTrigger data-testid="select-voice" className="w-full">
+                  <SelectValue placeholder="Choose a voice clone..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {readyVoices.map((voice) => (
+                    <SelectItem key={voice.id} value={voice.id}>
+                      {voice.name} - Quality: {voice.quality || "N/A"}%
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {readyVoices.length === 0 && !voicesLoading && (
+                <p className="text-sm text-muted-foreground">
+                  No voice clones available. Create one first in the "My Voices" tab.
+                </p>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <Button
+                data-testid="button-start-processing"
+                size="lg"
+                onClick={handleStartProcessing}
+                disabled={!videoFile || !selectedVoiceId || processVideoMutation.isPending}
+              >
+                {processVideoMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {processVideoMutation.isPending ? "Starting..." : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Start Voice Conversion
+                  </>
+                )}
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {currentJob && (
+          <>
+            <Card className="p-6 mb-8">
+              <ProcessingTimeline
+                steps={getProcessingSteps()}
+                currentStepId={
+                  currentJob.progress < 30 ? "extraction" :
+                  currentJob.progress < 80 ? "conversion" : "merging"
+                }
+              />
+            </Card>
+
+            {currentJob.status === "completed" && currentJob.mergedVideoPath && (
+              <Card className="p-6">
+                <h2 className="text-2xl font-semibold mb-4">Download Results</h2>
+                <div className="space-y-4">
+                  <div>
+                    <a
+                      href={currentJob.mergedVideoPath}
+                      download
+                      data-testid="link-download-video"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover-elevate active-elevate-2"
+                    >
+                      Download Video with Cloned Voice
+                    </a>
+                  </div>
+                  <Button data-testid="button-process-another" onClick={handleReset}>
+                    Process Another Video
+                  </Button>
+                </div>
+              </Card>
+            )}
+
+            {currentJob.status === "failed" && (
+              <Card className="p-6 border-destructive">
+                <h3 className="text-lg font-semibold text-destructive mb-2">
+                  Processing Failed
+                </h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  {currentJob.metadata?.errorMessage || "An unknown error occurred"}
+                </p>
+                <Button data-testid="button-try-again" onClick={handleReset}>
+                  Try Again
+                </Button>
+              </Card>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
