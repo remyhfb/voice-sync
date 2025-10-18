@@ -13,10 +13,22 @@ export class ReplicateService {
   }
 
   /**
-   * Transcribe audio using Whisper
+   * Transcribe audio using Whisper with word-level timestamps
    */
-  async transcribe(audioPath: string): Promise<string> {
-    console.log(`[Replicate] Transcribing audio: ${audioPath}`);
+  async transcribeWithTimestamps(audioPath: string): Promise<{
+    text: string;
+    segments: Array<{
+      start: number;
+      end: number;
+      text: string;
+      words?: Array<{
+        word: string;
+        start: number;
+        end: number;
+      }>;
+    }>;
+  }> {
+    console.log(`[Replicate] Transcribing audio with timestamps: ${audioPath}`);
     
     // Read audio file as base64
     const audioBuffer = await fs.readFile(audioPath);
@@ -32,7 +44,7 @@ export class ReplicateService {
           language: "en",
           translate: false,
           temperature: 0,
-          transcription: "plain text",
+          transcription: "srt", // Get timestamps in SRT format
           suppress_tokens: "-1",
           logprob_threshold: -1.0,
           no_speech_threshold: 0.6,
@@ -43,9 +55,18 @@ export class ReplicateService {
       }
     ) as any;
 
-    const transcription = output.transcription || output.text || output;
-    console.log(`[Replicate] Transcription: ${transcription.substring(0, 200)}...`);
-    return transcription;
+    console.log(`[Replicate] Whisper output:`, JSON.stringify(output).substring(0, 500));
+
+    // Parse the output to extract segments with timestamps
+    const result = {
+      text: output.text || output.transcription || "",
+      segments: output.segments || []
+    };
+
+    console.log(`[Replicate] Transcription: ${result.text.substring(0, 200)}...`);
+    console.log(`[Replicate] Found ${result.segments.length} segments with timestamps`);
+    
+    return result;
   }
 
   /**

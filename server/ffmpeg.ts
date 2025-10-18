@@ -87,6 +87,92 @@ export class FFmpegService {
     });
   }
 
+  /**
+   * Time-stretch audio to match target duration while preserving pitch
+   */
+  async timeStretchAudio(
+    inputPath: string,
+    outputPath: string,
+    targetDuration: number
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // First get the current duration
+      ffmpeg.ffprobe(inputPath, (err, metadata) => {
+        if (err) {
+          reject(new Error(`FFprobe error: ${err.message}`));
+          return;
+        }
+
+        const currentDuration = metadata.format.duration || 0;
+        if (currentDuration === 0) {
+          reject(new Error("Could not determine audio duration"));
+          return;
+        }
+
+        // Calculate tempo adjustment factor
+        const tempo = currentDuration / targetDuration;
+        
+        console.log(`[FFmpeg] Time-stretching: ${currentDuration}s → ${targetDuration}s (tempo: ${tempo})`);
+
+        // Use atempo filter to adjust speed while preserving pitch
+        // atempo only supports 0.5 to 2.0, so chain multiple if needed
+        const atempoFilters: string[] = [];
+        let remainingTempo = tempo;
+        
+        while (remainingTempo > 2.0) {
+          atempoFilters.push('atempo=2.0');
+          remainingTempo /= 2.0;
+        }
+        while (remainingTempo < 0.5) {
+          atempoFilters.push('atempo=0.5');
+          remainingTempo /= 0.5;
+        }
+        atempoFilters.push(`atempo=${remainingTempo}`);
+
+        ffmpeg(inputPath)
+          .audioFilters(atempoFilters.join(','))
+          .output(outputPath)
+          .on("end", () => resolve())
+          .on("error", (err) => reject(new Error(`FFmpeg time-stretch error: ${err.message}`)))
+          .run();
+      });
+    });
+  }
+
+  /**
+   * Concatenate multiple audio files
+   */
+  async concatenateAudio(
+    inputPaths: string[],
+    outputPath: string
+  ): Promise<void> {
+    if (inputPaths.length === 0) {
+      throw new Error("No input files to concatenate");
+    }
+
+    // Create concat file list
+    const concatListPath = `/tmp/concat_${Date.now()}.txt`;
+    const concatList = inputPaths.map(p => `file '${p}'`).join('\n');
+    await fs.writeFile(concatListPath, concatList);
+
+    return new Promise((resolve, reject) => {
+      ffmpeg()
+        .input(concatListPath)
+        .inputOptions(['-f', 'concat', '-safe', '0'])
+        .outputOptions(['-c', 'copy'])
+        .output(outputPath)
+        .on("end", async () => {
+          await fs.unlink(concatListPath).catch(() => {});
+          resolve();
+        })
+        .on("error", async (err) => {
+          await fs.unlink(concatListPath).catch(() => {});
+          reject(new Error(`FFmpeg concat error: ${err.message}`));
+        })
+        .run();
+    });
+  }
+
   async mergeAudioVideo(
     videoPath: string,
     audioPath: string,

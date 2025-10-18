@@ -131,21 +131,21 @@ export default function CreatePage() {
         },
         {
           id: "transcription",
-          label: "Transcribing with Whisper",
-          status: job.progress >= 40 ? "completed" : job.progress >= 25 ? "processing" : "pending",
-          estimatedTime: "~30 seconds",
+          label: "Transcribing with Word Timestamps",
+          status: job.progress >= 35 ? "completed" : job.progress >= 25 ? "processing" : "pending",
+          estimatedTime: "~20 seconds",
         },
         {
-          id: "bark",
-          label: "Generating Natural Speech (Bark)",
-          status: job.progress >= 65 ? "completed" : job.progress >= 40 ? "processing" : "pending",
-          estimatedTime: "~1 minute",
+          id: "tts-align",
+          label: "Generating Time-Aligned TTS Segments",
+          status: job.progress >= 75 ? "completed" : job.progress >= 35 ? "processing" : "pending",
+          estimatedTime: "~2 minutes",
         },
         {
-          id: "s2s",
-          label: "Converting to Cloned Voice (S2S)",
-          status: job.progress >= 85 ? "completed" : job.progress >= 65 ? "processing" : "pending",
-          estimatedTime: "~30 seconds",
+          id: "concat",
+          label: "Concatenating Aligned Segments",
+          status: job.progress >= 85 ? "completed" : job.progress >= 75 ? "processing" : "pending",
+          estimatedTime: "~15 seconds",
         },
         {
           id: "merging",
@@ -271,12 +271,12 @@ export default function CreatePage() {
                       : "border-border hover-elevate"
                   }`}
                 >
-                  <div className="font-semibold mb-1">🔥 Bark Neural Vocoder (Recommended)</div>
+                  <div className="font-semibold mb-1">🎯 Time-Aligned TTS (Recommended)</div>
                   <div className="text-sm text-muted-foreground">
-                    Transcribe → Generate natural speech → Convert to clone
+                    Word-level timestamps → Time-stretched TTS → Perfect lip-sync
                   </div>
                   <div className="text-xs text-muted-foreground mt-2">
-                    Best for VEO 3.1 synthetic voices
+                    Complete voice replacement + preserved timing
                   </div>
                 </button>
                 

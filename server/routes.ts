@@ -469,33 +469,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await fs.writeFile(isolatedAudioPath, isolatedBuffer);
           await storage.updateProcessingJob(job.id, { progress: 25 });
 
-          // Step 3: Transcribe with Whisper (25-40%)
-          console.log(`[JOB ${job.id}] [BARK] Transcribing audio with Whisper`);
+          // Step 3: Transcribe with Whisper (get word-level timestamps) (25-35%)
+          console.log(`[JOB ${job.id}] [TIME-ALIGNED] Transcribing with Whisper (word-level timestamps)`);
           const replicate = new ReplicateService();
-          const transcription = await replicate.transcribe(isolatedAudioPath);
-          console.log(`[JOB ${job.id}] [BARK] Transcription length: ${transcription.length} characters`);
-          await storage.updateProcessingJob(job.id, { progress: 40 });
+          const transcriptData = await replicate.transcribeWithTimestamps(isolatedAudioPath);
+          console.log(`[JOB ${job.id}] [TIME-ALIGNED] Found ${transcriptData.segments.length} segments`);
+          await storage.updateProcessingJob(job.id, { progress: 35 });
 
-          // Step 4: Generate natural speech with Bark (40-65%)
-          console.log(`[JOB ${job.id}] [BARK] Generating natural speech with Bark`);
-          const barkBuffer = await replicate.generateSpeech(transcription);
-          await fs.writeFile(barkAudioPath, barkBuffer);
-          console.log(`[JOB ${job.id}] [BARK] Bark audio: ${barkBuffer.length} bytes`);
-          await storage.updateProcessingJob(job.id, { progress: 65 });
+          // Step 4: Generate time-aligned TTS for each segment (35-75%)
+          console.log(`[JOB ${job.id}] [TIME-ALIGNED] Generating time-aligned TTS segments`);
+          const segmentPaths: string[] = [];
+          
+          for (let i = 0; i < transcriptData.segments.length; i++) {
+            const segment = transcriptData.segments[i];
+            const segmentDuration = segment.end - segment.start;
+            
+            console.log(`[JOB ${job.id}] [TIME-ALIGNED] Segment ${i+1}/${transcriptData.segments.length}: "${segment.text.substring(0, 50)}..." (${segmentDuration.toFixed(2)}s)`);
+            
+            // Generate TTS for this segment using ElevenLabs
+            const segmentTTSPath = `/tmp/uploads/${job.id}_segment_${i}_tts.mp3`;
+            const segmentTTSBuffer = await elevenlabs.textToSpeech(
+              segment.text,
+              voice.elevenLabsVoiceId!
+            );
+            await fs.writeFile(segmentTTSPath, segmentTTSBuffer);
+            
+            // Time-stretch to match original segment duration
+            const segmentAlignedPath = `/tmp/uploads/${job.id}_segment_${i}_aligned.mp3`;
+            await ffmpegService.timeStretchAudio(
+              segmentTTSPath,
+              segmentAlignedPath,
+              segmentDuration
+            );
+            
+            segmentPaths.push(segmentAlignedPath);
+            
+            // Update progress
+            const segmentProgress = 35 + ((i + 1) / transcriptData.segments.length) * 40;
+            await storage.updateProcessingJob(job.id, { progress: Math.round(segmentProgress) });
+            
+            // Cleanup TTS temp file
+            await fs.unlink(segmentTTSPath).catch(() => {});
+          }
+          
+          console.log(`[JOB ${job.id}] [TIME-ALIGNED] Concatenating ${segmentPaths.length} time-aligned segments`);
+          await storage.updateProcessingJob(job.id, { progress: 75 });
 
-          // Step 5: Convert Bark audio to cloned voice with S2S (65-85%)
-          console.log(`[JOB ${job.id}] [BARK] Converting Bark speech to cloned voice`);
-          const convertedBuffer = await elevenlabs.speechToSpeech(
-            voice.elevenLabsVoiceId!,
-            barkAudioPath,
-            { removeBackgroundNoise: false }
-          );
-          await fs.writeFile(convertedAudioPath, convertedBuffer);
-          console.log(`[JOB ${job.id}] [BARK] Final audio: ${convertedBuffer.length} bytes`);
+          // Step 5: Concatenate all time-aligned segments (75-85%)
+          await ffmpegService.concatenateAudio(segmentPaths, convertedAudioPath);
+          console.log(`[JOB ${job.id}] [TIME-ALIGNED] Final time-aligned audio created`);
+          
           await storage.updateProcessingJob(job.id, {
             convertedAudioPath,
             progress: 85,
           });
+          
+          // Cleanup segment temp files
+          for (const segmentPath of segmentPaths) {
+            await fs.unlink(segmentPath).catch(() => {});
+          }
 
           // Step 6: Merge audio with video (85-100%)
           console.log(`[JOB ${job.id}] [BARK] Merging audio with video`);
