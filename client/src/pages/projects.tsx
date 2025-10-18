@@ -9,10 +9,25 @@ import { AlignmentReport } from "@/components/AlignmentReport";
 import { useState } from "react";
 
 export default function ProjectsPage() {
-  const { data: projects = [], isLoading } = useQuery<ProcessingJob[]>({
+  const { data: rawProjects = [], isLoading } = useQuery<ProcessingJob[]>({
     queryKey: ["/api/jobs"],
     refetchInterval: 2000, // Poll every 2 seconds for real-time updates
   });
+
+  // Sort by creation date, newest first
+  const projects = [...rawProjects].sort((a, b) => 
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
+  // Debug: Log job types to console
+  console.log('[Projects] Total jobs:', projects.length);
+  console.log('[Projects] Job types:', projects.reduce((acc, p) => {
+    acc[p.type] = (acc[p.type] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>));
+  console.log('[Projects] Lipsync jobs with reports:', 
+    projects.filter(p => p.type === 'lipsync' && p.metadata?.alignmentReport).length
+  );
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
