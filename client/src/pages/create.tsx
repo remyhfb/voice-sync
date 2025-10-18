@@ -14,9 +14,10 @@ import type { VoiceClone, ProcessingJob } from "@shared/schema";
 
 export default function CreatePage() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>("");
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
-  const [pipeline, setPipeline] = useState<"s2s" | "bark">("bark"); // Default to Bark pipeline
+  const [pipeline, setPipeline] = useState<"s2s" | "bark" | "lipsync">("bark"); // Default to Bark pipeline
   const { toast } = useToast();
 
   const { data: voices = [], isLoading: voicesLoading } = useQuery<VoiceClone[]>({
@@ -39,14 +40,22 @@ export default function CreatePage() {
   });
 
   const processVideoMutation = useMutation({
-    mutationFn: async (data: { videoFile: File; voiceCloneId: string; pipeline: "s2s" | "bark" }) => {
+    mutationFn: async (data: { videoFile: File; audioFile?: File; voiceCloneId: string; pipeline: "s2s" | "bark" | "lipsync" }) => {
       const formData = new FormData();
       formData.append("video", data.videoFile);
-      formData.append("voiceCloneId", data.voiceCloneId);
+      
+      if (data.pipeline === "lipsync") {
+        if (!data.audioFile) throw new Error("Audio file required for lip-sync pipeline");
+        formData.append("audio", data.audioFile);
+      } else {
+        formData.append("voiceCloneId", data.voiceCloneId);
+      }
 
-      const endpoint = data.pipeline === "bark" 
-        ? "/api/jobs/process-video-bark"
-        : "/api/jobs/process-video";
+      const endpoint = data.pipeline === "lipsync"
+        ? "/api/jobs/process-lipsync"
+        : data.pipeline === "bark" 
+          ? "/api/jobs/process-video-bark"
+          : "/api/jobs/process-video";
 
       const response = await fetch(endpoint, {
         method: "POST",
@@ -65,9 +74,11 @@ export default function CreatePage() {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       toast({
         title: "Processing started",
-        description: pipeline === "bark" 
-          ? "Video processing with Bark neural vocoder + S2S" 
-          : "Video processing with ElevenLabs S2S",
+        description: pipeline === "lipsync"
+          ? "Lip-sync processing: Time-stretching video to match your voice"
+          : pipeline === "bark" 
+            ? "Video processing with Bark neural vocoder + S2S" 
+            : "Video processing with ElevenLabs S2S",
       });
     },
     onError: (error: Error) => {
@@ -85,25 +96,50 @@ export default function CreatePage() {
     }
   };
 
-  const handleStartProcessing = () => {
-    if (!videoFile || !selectedVoiceId) {
-      toast({
-        title: "Missing information",
-        description: "Please upload a video and select a voice clone",
-        variant: "destructive",
-      });
-      return;
+  const handleAudioUpload = (files: File[]) => {
+    if (files.length > 0) {
+      setAudioFile(files[0]);
     }
+  };
 
-    processVideoMutation.mutate({
-      videoFile,
-      voiceCloneId: selectedVoiceId,
-      pipeline,
-    });
+  const handleStartProcessing = () => {
+    if (pipeline === "lipsync") {
+      // Lip-sync pipeline requires VEO video + user audio
+      if (!videoFile || !audioFile) {
+        toast({
+          title: "Missing information",
+          description: "Please upload both VEO video and your audio recording",
+          variant: "destructive",
+        });
+        return;
+      }
+      processVideoMutation.mutate({
+        videoFile,
+        audioFile,
+        voiceCloneId: "", // Not needed for lipsync
+        pipeline,
+      });
+    } else {
+      // S2S and Bark pipelines require video + voice clone
+      if (!videoFile || !selectedVoiceId) {
+        toast({
+          title: "Missing information",
+          description: "Please upload a video and select a voice clone",
+          variant: "destructive",
+        });
+        return;
+      }
+      processVideoMutation.mutate({
+        videoFile,
+        voiceCloneId: selectedVoiceId,
+        pipeline,
+      });
+    }
   };
 
   const handleReset = () => {
     setVideoFile(null);
+    setAudioFile(null);
     setSelectedVoiceId("");
     setCurrentJobId(null);
   };
@@ -113,6 +149,54 @@ export default function CreatePage() {
   const getProcessingSteps = (): ProcessingStep[] => {
     const job = currentJob;
     if (!job) return [];
+
+    // Lip-sync pipeline steps
+    if (job.type === "lipsync") {
+      return [
+        {
+          id: "extraction",
+          label: "VEO Audio Extraction",
+          status: job.progress >= 10 ? "completed" : job.status === "processing" ? "processing" : "pending",
+          estimatedTime: "~10 seconds",
+        },
+        {
+          id: "cleanup",
+          label: "Audio Cleanup (Noise Reduction + Enhancement)",
+          status: job.progress >= 20 ? "completed" : job.progress >= 10 ? "processing" : "pending",
+          estimatedTime: "~15 seconds",
+        },
+        {
+          id: "transcription",
+          label: "Transcribing Both Audios with Whisper",
+          status: job.progress >= 40 ? "completed" : job.progress >= 20 ? "processing" : "pending",
+          estimatedTime: "~30 seconds",
+        },
+        {
+          id: "alignment",
+          label: "Aligning Segments & Calculating Time-Stretch",
+          status: job.progress >= 45 ? "completed" : job.progress >= 40 ? "processing" : "pending",
+          estimatedTime: "~5 seconds",
+        },
+        {
+          id: "timestretch",
+          label: "Time-Stretching Video to Match Your Timing",
+          status: job.progress >= 70 ? "completed" : job.progress >= 45 ? "processing" : "pending",
+          estimatedTime: "~1 minute",
+        },
+        {
+          id: "lipsync",
+          label: "Applying Lip-Sync with Sync Labs",
+          status: job.progress >= 90 ? "completed" : job.progress >= 70 ? "processing" : "pending",
+          estimatedTime: "~1 minute",
+        },
+        {
+          id: "upload",
+          label: "Finalizing & Uploading",
+          status: job.status === "completed" ? "completed" : job.progress >= 90 ? "processing" : "pending",
+          estimatedTime: "~10 seconds",
+        },
+      ];
+    }
 
     // Bark pipeline steps (voice_conversion_bark)
     if (job.type === "voice_conversion_bark") {
@@ -228,40 +312,10 @@ export default function CreatePage() {
             <Separator className="my-6" />
 
             <h2 className="text-xl font-semibold mb-4">
-              Step 2: Select Voice Clone
+              Step 2: Choose Processing Pipeline
             </h2>
             <div className="space-y-3">
-              <Select
-                value={selectedVoiceId}
-                onValueChange={setSelectedVoiceId}
-                disabled={voicesLoading || readyVoices.length === 0}
-              >
-                <SelectTrigger data-testid="select-voice" className="w-full">
-                  <SelectValue placeholder="Choose a voice clone..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {readyVoices.map((voice) => (
-                    <SelectItem key={voice.id} value={voice.id}>
-                      {voice.name} - Quality: {voice.quality || "N/A"}%
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {readyVoices.length === 0 && !voicesLoading && (
-                <p className="text-sm text-muted-foreground">
-                  No voice clones available. Create one first in the "My Voices" tab.
-                </p>
-              )}
-            </div>
-
-            <Separator className="my-6" />
-
-            <h2 className="text-xl font-semibold mb-4">
-              Step 3: Choose Processing Pipeline
-            </h2>
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <button
                   data-testid="button-pipeline-s2s"
                   onClick={() => setPipeline("s2s")}
@@ -271,12 +325,12 @@ export default function CreatePage() {
                       : "border-border hover-elevate"
                   }`}
                 >
-                  <div className="font-semibold mb-1">⚡ Speech-to-Speech (For VEO)</div>
+                  <div className="font-semibold mb-1">⚡ Speech-to-Speech</div>
                   <div className="text-sm text-muted-foreground">
-                    Preserves emotion & acting, replaces voice quality
+                    AI voice conversion with emotion preservation
                   </div>
                   <div className="text-xs text-green-500 mt-2 font-medium">
-                    ✓ Keeps VEO's professional delivery with your voice
+                    ✓ Clone voice + VEO emotion
                   </div>
                 </button>
                 
@@ -294,24 +348,102 @@ export default function CreatePage() {
                     Word-level timestamps → Time-stretched TTS
                   </div>
                   <div className="text-xs text-muted-foreground mt-2">
-                    ⚠️ Neutral delivery - loses original emotion/acting
+                    ⚠️ Neutral delivery
+                  </div>
+                </button>
+
+                <button
+                  data-testid="button-pipeline-lipsync"
+                  onClick={() => setPipeline("lipsync")}
+                  className={`p-4 rounded-lg border-2 transition-all text-left ${
+                    pipeline === "lipsync"
+                      ? "border-primary bg-primary/10"
+                      : "border-border hover-elevate"
+                  }`}
+                >
+                  <div className="font-semibold mb-1">🎬 Lip-Sync (Your Voice)</div>
+                  <div className="text-sm text-muted-foreground">
+                    Use YOUR voice recording + AI lip-sync
+                  </div>
+                  <div className="text-xs text-green-500 mt-2 font-medium">
+                    ✓ 100% authentic performance
                   </div>
                 </button>
               </div>
             </div>
+
+            <Separator className="my-6" />
+
+            {pipeline === "lipsync" ? (
+              <>
+                <h2 className="text-xl font-semibold mb-4">
+                  Step 3: Upload Your Audio Recording
+                </h2>
+                <FileUploadZone
+                  onFilesSelected={handleAudioUpload}
+                  accept="audio/*"
+                  multiple={false}
+                  maxSize={50 * 1024 * 1024}
+                  title="Upload Your Voice Acting"
+                  description="Your audio recording matching VEO video (MP3, WAV, M4A)"
+                  icon="audio"
+                />
+                {audioFile && (
+                  <div className="mt-4 p-3 bg-accent/20 rounded-md">
+                    <p className="text-sm font-mono">
+                      Audio: {audioFile.name} ({(audioFile.size / (1024 * 1024)).toFixed(2)} MB)
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <h2 className="text-xl font-semibold mb-4">
+                  Step 3: Select Voice Clone
+                </h2>
+                <div className="space-y-3">
+                  <Select
+                    value={selectedVoiceId}
+                    onValueChange={setSelectedVoiceId}
+                    disabled={voicesLoading || readyVoices.length === 0}
+                  >
+                    <SelectTrigger data-testid="select-voice" className="w-full">
+                      <SelectValue placeholder="Choose a voice clone..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {readyVoices.map((voice) => (
+                        <SelectItem key={voice.id} value={voice.id}>
+                          {voice.name} - Quality: {voice.quality || "N/A"}%
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {readyVoices.length === 0 && !voicesLoading && (
+                    <p className="text-sm text-muted-foreground">
+                      No voice clones available. Create one first in the "My Voices" tab.
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
 
             <div className="mt-6 flex justify-end">
               <Button
                 data-testid="button-start-processing"
                 size="lg"
                 onClick={handleStartProcessing}
-                disabled={!videoFile || !selectedVoiceId || processVideoMutation.isPending}
+                disabled={
+                  !videoFile || 
+                  (pipeline === "lipsync" ? !audioFile : !selectedVoiceId) || 
+                  processVideoMutation.isPending
+                }
               >
                 {processVideoMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {processVideoMutation.isPending ? "Starting..." : (
                   <>
                     <Sparkles className="mr-2 h-4 w-4" />
-                    Start Voice Conversion
+                    {pipeline === "lipsync" ? "Start Lip-Sync Processing" : "Start Voice Conversion"}
                   </>
                 )}
               </Button>

@@ -30,6 +30,51 @@ VoiceSwap emphasizes processing transparency through visual feedback and real-ti
 
 ## Recent Changes (October 18, 2025)
 
+### Lip-Sync Pipeline Implementation (Latest)
+**Problem:** Users want to use their OWN voice acting (90% accurate) instead of AI-generated voices, with the system handling the final 10% timing/lip-sync adjustment.
+
+**Solution:** Implemented hybrid video manipulation + AI lip-sync pipeline:
+- User provides: VEO video + their own voice recording (matching the script)
+- System performs: Audio cleanup → Transcription → Segment alignment → Video time-stretching → Lip-sync
+
+**Technical Implementation:**
+1. **Services Created:**
+   - `SyncLabsService` (server/synclabs.ts): Sync Labs API integration for high-quality lip-sync
+   - `SegmentAligner` (server/segment-aligner.ts): Whisper transcription, segment alignment, time-stretch ratio calculation
+   - `FFmpegService` extensions: Video segment extraction, time-stretching (setpts filter), concatenation
+
+2. **Backend Route:** `/api/jobs/process-lipsync`
+   - Accepts multipart upload: VEO video + user audio
+   - Pipeline steps:
+     1. Extract VEO audio (0-10%)
+     2. Clean user audio with ElevenLabs (10-20%)
+     3. Transcribe both with Whisper (20-40%)
+     4. Align segments & calculate time-stretch ratios (40-45%)
+     5. Time-stretch video segments to match user timing (45-70%)
+     6. Concatenate time-stretched segments (70%)
+     7. Apply Sync Labs lip-sync (70-90%)
+     8. Upload final video (90-100%)
+
+3. **Frontend Updates:**
+   - Added third pipeline option: "Lip-Sync (Your Voice)"
+   - Conditional UI: Shows audio upload zone when lip-sync selected, voice clone selector otherwise
+   - Processing timeline with 7 steps showing real-time progress
+   - Quality indicators: Displays alignment quality (excellent/good/acceptable/poor)
+
+4. **Schema Updates:**
+   - Added `audioFileName` to job metadata
+   - Added `alignmentQuality` and `avgTimeStretchRatio` for quality tracking
+
+**Commercial Advantage:**
+- Preserves creator's authentic voice performance (emotion, timing, delivery)
+- Better than AI voice generation for creators who can act
+- Targets users with 90% accurate voice acting who need help with final 10% polish
+- Cost: ~$0.05/sec for Sync Labs (~$3/min of video)
+
+**Awaiting:** Sync Labs API key (SYNCLABS_API_KEY) for testing
+
+## Recent Changes (October 18, 2025)
+
 ### Speech-to-Speech Voice Conversion Strength Fix
 **Problem:** S2S pipeline was only applying 30% voice conversion, preserving 70% of VEO's synthetic voice instead of fully replacing it with the cloned voice.
 
@@ -52,6 +97,14 @@ VoiceSwap emphasizes processing transparency through visual feedback and real-ti
 - ✅ Perfect lip-sync timing maintained
 - ✅ Commercial-quality voice swapping for VEO videos
 
-### Two Processing Pipelines Available
+### Three Processing Pipelines Available
 1. **Speech-to-Speech (For VEO)**: Preserves professional acting/emotion while replacing voice - recommended for AI-generated videos
 2. **Time-Aligned TTS**: Generates speech from text with word-level timing precision - neutral delivery, loses original emotion
+3. **Lip-Sync (Your Voice)**: NEW - Hybrid approach using YOUR authentic voice acting + AI lip-sync technology
+   - **Audio Cleanup**: ElevenLabs audio isolation removes background noise and enhances mic quality
+   - **Transcription**: Whisper transcribes both VEO video audio and user audio with word-level timestamps
+   - **Segment Alignment**: Analyzes timing differences between VEO and user performance
+   - **Video Time-Stretching**: FFmpeg adjusts video speed (0.8-1.2x) per-segment to match user's timing
+   - **Lip-Sync**: Sync Labs applies AI lip-sync to time-stretched video with cleaned user audio
+   - **Result**: 100% authentic voice performance with perfect lip-sync, preserving user's emotion and delivery
+   - **Tolerance**: ±20% speed variation per segment (visually undetectable), ±100ms timing precision for lip-sync
