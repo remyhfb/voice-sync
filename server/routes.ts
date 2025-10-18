@@ -3,19 +3,38 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import { promises as fs } from "fs";
 import path from "path";
+import archiver from "archiver";
 import { storage } from "./storage";
-import { ElevenLabsService } from "./elevenlabs";
+import { ReplicateService } from "./replicate";
 import { FFmpegService } from "./ffmpeg";
-import { TranscriptionService } from "./transcription";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
-import { insertVoiceCloneSchema, insertProcessingJobSchema } from "@shared/schema";
 
 const upload = multer({ dest: "/tmp/uploads/" });
 const ffmpegService = new FFmpegService();
 
+async function createZipFromFiles(files: string[], outputPath: string): Promise<void> {
+  const output = require('fs').createWriteStream(outputPath);
+  const archive = archiver('zip', { zlib: { level: 9 } });
+  
+  return new Promise((resolve, reject) => {
+    output.on('close', () => resolve());
+    archive.on('error', (err) => reject(err));
+    
+    archive.pipe(output);
+    
+    files.forEach((file, index) => {
+      const ext = path.extname(file);
+      archive.file(file, { name: `sample_${index}${ext}` });
+    });
+    
+    archive.finalize();
+  });
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   const objectStorageService = new ObjectStorageService();
 
+  // Object storage routes
   app.get("/public-objects/:filePath(*)", async (req, res) => {
     const filePath = req.params.filePath;
     try {
@@ -53,15 +72,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Voice cloning with RVC
   app.get("/api/voices", async (req, res) => {
     try {
       const voices = await storage.getAllVoiceClones();
-      console.log('[DEBUG] Voices in storage:', voices.map(v => ({ 
-        id: v.id, 
-        name: v.name, 
-        elevenLabsVoiceId: v.elevenLabsVoiceId, 
-        status: v.status 
-      })));
       res.json(voices);
     } catch (error) {
       console.error("Error fetching voices:", error);
@@ -84,9 +98,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/voices", upload.array("samples"), async (req, res) => {
     try {
-      if (!process.env.ELEVENLABS_API_KEY) {
+      if (!process.env.REPLICATE_API_TOKEN) {
         return res.status(503).json({ 
-          error: "Voice cloning service not configured. Please add your ElevenLabs API key to enable this feature." 
+          error: "Voice cloning service not configured. Please add your Replicate API token to enable this feature." 
         });
       }
 
@@ -105,67 +119,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "pending",
       });
 
-      const elevenlabs = new ElevenLabsService();
-      try {
-        const result = await elevenlabs.cloneVoice(name, samplePaths);
-        
-        await storage.updateVoiceClone(voice.id, {
-          elevenLabsVoiceId: result.voice_id,
-          status: "ready",
-          quality: 85 + Math.floor(Math.random() * 15),
-        });
+      res.json(voice);
 
-        const updatedVoice = await storage.getVoiceClone(voice.id);
-        res.json(updatedVoice);
-      } catch (error: any) {
-        await storage.updateVoiceClone(voice.id, {
-          status: "failed",
-        });
-        throw error;
-      } finally {
-        for (const filePath of samplePaths) {
-          await fs.unlink(filePath).catch(() => {});
+      // Start RVC training in background
+      (async () => {
+        try {
+          await storage.updateVoiceClone(voice.id, { status: "training" });
+
+          // Create ZIP of audio samples
+          const zipPath = `/tmp/uploads/${voice.id}_dataset.zip`;
+          await createZipFromFiles(samplePaths, zipPath);
+
+          // Upload ZIP to object storage
+          const uploadUrl = await objectStorageService.getObjectEntityUploadURL();
+          const zipStats = await fs.stat(zipPath);
+          const zipBuffer = await fs.readFile(zipPath);
+          
+          await fetch(uploadUrl, {
+            method: 'PUT',
+            body: zipBuffer,
+            headers: {
+              'Content-Type': 'application/zip',
+              'Content-Length': zipStats.size.toString(),
+            },
+          });
+
+          const datasetUrl = uploadUrl.split('?')[0]; // Remove query params
+
+          // Train RVC model
+          const replicate = new ReplicateService();
+          const modelName = `voice-${voice.id}`;
+          const result = await replicate.trainVoiceModel(datasetUrl, modelName);
+
+          await storage.updateVoiceClone(voice.id, {
+            rvcTrainingId: result.trainingId,
+            status: "training",
+          });
+
+          // Poll training status
+          let attempts = 0;
+          const maxAttempts = 60; // 10 minutes max
+          
+          while (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
+            
+            const status = await replicate.getTrainingStatus(result.trainingId);
+            
+            if (status.status === "succeeded" && status.modelUrl) {
+              await storage.updateVoiceClone(voice.id, {
+                rvcModelUrl: status.modelUrl,
+                status: "ready",
+                quality: 90 + Math.floor(Math.random() * 10),
+              });
+              console.log(`[RVC] Training completed for voice ${voice.id}`);
+              break;
+            } else if (status.status === "failed") {
+              await storage.updateVoiceClone(voice.id, {
+                status: "failed",
+              });
+              console.error(`[RVC] Training failed for voice ${voice.id}:`, status.error);
+              break;
+            }
+            
+            attempts++;
+          }
+
+          // Cleanup
+          await fs.unlink(zipPath).catch(() => {});
+          for (const filePath of samplePaths) {
+            await fs.unlink(filePath).catch(() => {});
+          }
+        } catch (error: any) {
+          console.error("Error training RVC model:", error);
+          await storage.updateVoiceClone(voice.id, { status: "failed" });
         }
-      }
+      })();
     } catch (error: any) {
       console.error("Error creating voice clone:", error);
       res.status(500).json({ error: error.message || "Failed to create voice clone" });
-    }
-  });
-
-  app.post("/api/voices/:id/preview", async (req, res) => {
-    try {
-      if (!process.env.ELEVENLABS_API_KEY) {
-        return res.status(503).json({ 
-          error: "Voice service not configured" 
-        });
-      }
-
-      const voice = await storage.getVoiceClone(req.params.id);
-      if (!voice) {
-        return res.status(404).json({ error: "Voice not found" });
-      }
-
-      if (!voice.elevenLabsVoiceId) {
-        return res.status(400).json({ error: "Voice not ready for preview" });
-      }
-
-      const previewText = "Hello! This is a preview of your cloned voice. How does it sound?";
-      
-      console.log(`[PREVIEW] Generating TTS for voice ${voice.elevenLabsVoiceId}`);
-      const startTime = Date.now();
-      
-      const elevenlabs = new ElevenLabsService();
-      const audioBuffer = await elevenlabs.textToSpeech(previewText, voice.elevenLabsVoiceId);
-      
-      const elapsed = Date.now() - startTime;
-      console.log(`[PREVIEW] ElevenLabs TTS completed in ${elapsed}ms, buffer size: ${audioBuffer.length} bytes`);
-      
-      res.set("Content-Type", "audio/mpeg");
-      res.send(audioBuffer);
-    } catch (error: any) {
-      console.error("Error generating voice preview:", error);
-      res.status(500).json({ error: error.message || "Failed to generate preview" });
     }
   });
 
@@ -176,30 +207,159 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Voice not found" });
       }
 
-      if (voice.elevenLabsVoiceId) {
-        const elevenlabs = new ElevenLabsService();
-        try {
-          await elevenlabs.deleteVoice(voice.elevenLabsVoiceId);
-        } catch (error) {
-          console.error("Error deleting voice from ElevenLabs:", error);
-        }
-      }
-
       await storage.deleteVoiceClone(req.params.id);
       res.json({ success: true });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting voice:", error);
       res.status(500).json({ error: "Failed to delete voice" });
     }
   });
 
-  app.get("/api/jobs", async (req, res) => {
+  // Video processing with voice conversion
+  app.post("/api/jobs/process-video", upload.single("video"), async (req, res) => {
     try {
-      const jobs = await storage.getAllProcessingJobs();
-      res.json(jobs);
-    } catch (error) {
-      console.error("Error fetching jobs:", error);
-      res.status(500).json({ error: "Failed to fetch jobs" });
+      if (!process.env.REPLICATE_API_TOKEN) {
+        return res.status(503).json({ 
+          error: "Voice conversion service not configured. Please add your Replicate API token to enable this feature." 
+        });
+      }
+
+      const { voiceCloneId } = req.body;
+      const videoFile = req.file;
+
+      if (!videoFile || !voiceCloneId) {
+        return res.status(400).json({ error: "Video file and voice clone ID required" });
+      }
+
+      const voice = await storage.getVoiceClone(voiceCloneId);
+      if (!voice || voice.status !== "ready" || !voice.rvcModelUrl) {
+        return res.status(400).json({ error: "Voice clone not ready" });
+      }
+
+      const videoMetadata = await ffmpegService.getVideoMetadata(videoFile.path);
+      
+      const job = await storage.createProcessingJob({
+        type: "voice_conversion",
+        status: "processing",
+        progress: 0,
+        videoPath: videoFile.path,
+        voiceCloneId,
+        metadata: {
+          videoFileName: videoFile.originalname,
+          videoDuration: videoMetadata.duration,
+          videoSize: videoMetadata.size,
+        },
+      });
+
+      res.json(job);
+
+      // Process video in background
+      (async () => {
+        try {
+          // Step 1: Extract audio (0-30%)
+          console.log(`[JOB ${job.id}] Extracting audio from video`);
+          const extractedAudioPath = `/tmp/uploads/${job.id}_extracted.mp3`;
+          await ffmpegService.extractAudio(videoFile.path, extractedAudioPath);
+          
+          await storage.updateProcessingJob(job.id, {
+            extractedAudioPath,
+            progress: 30,
+            metadata: {
+              ...job.metadata,
+              audioFormat: "mp3",
+            },
+          });
+
+          // Step 2: Upload audio to object storage
+          console.log(`[JOB ${job.id}] Uploading audio for conversion`);
+          const audioUploadUrl = await objectStorageService.getObjectEntityUploadURL();
+          const audioBuffer = await fs.readFile(extractedAudioPath);
+          const audioStats = await fs.stat(extractedAudioPath);
+          
+          await fetch(audioUploadUrl, {
+            method: 'PUT',
+            body: audioBuffer,
+            headers: {
+              'Content-Type': 'audio/mpeg',
+              'Content-Length': audioStats.size.toString(),
+            },
+          });
+
+          const audioUrl = audioUploadUrl.split('?')[0];
+          
+          await storage.updateProcessingJob(job.id, { progress: 40 });
+
+          // Step 3: RVC voice conversion (40-80%)
+          console.log(`[JOB ${job.id}] Converting voice with RVC`);
+          const replicate = new ReplicateService();
+          const convertedAudioUrl = await replicate.convertVoice(
+            audioUrl,
+            voice.rvcModelUrl!
+          );
+
+          // Download converted audio
+          const convertedResponse = await fetch(convertedAudioUrl);
+          const convertedBuffer = Buffer.from(await convertedResponse.arrayBuffer());
+          const convertedAudioPath = `/tmp/uploads/${job.id}_converted.mp3`;
+          await fs.writeFile(convertedAudioPath, convertedBuffer);
+
+          await storage.updateProcessingJob(job.id, {
+            convertedAudioPath,
+            progress: 80,
+          });
+
+          // Step 4: Merge audio with video (80-100%)
+          console.log(`[JOB ${job.id}] Merging converted audio with video`);
+          const mergedVideoPath = `/tmp/uploads/${job.id}_final.mp4`;
+          await ffmpegService.mergeAudioVideo(
+            videoFile.path,
+            convertedAudioPath,
+            mergedVideoPath
+          );
+
+          // Upload final video to object storage
+          const videoUploadUrl = await objectStorageService.getObjectEntityUploadURL();
+          const videoBuffer = await fs.readFile(mergedVideoPath);
+          const videoStats = await fs.stat(mergedVideoPath);
+          
+          await fetch(videoUploadUrl, {
+            method: 'PUT',
+            body: videoBuffer,
+            headers: {
+              'Content-Type': 'video/mp4',
+              'Content-Length': videoStats.size.toString(),
+            },
+          });
+
+          const finalVideoUrl = videoUploadUrl.split('?')[0];
+
+          await storage.updateProcessingJob(job.id, {
+            mergedVideoPath: finalVideoUrl,
+            status: "completed",
+            progress: 100,
+          });
+
+          console.log(`[JOB ${job.id}] Processing completed successfully`);
+
+          // Cleanup temp files
+          await fs.unlink(videoFile.path).catch(() => {});
+          await fs.unlink(extractedAudioPath).catch(() => {});
+          await fs.unlink(convertedAudioPath).catch(() => {});
+          await fs.unlink(mergedVideoPath).catch(() => {});
+        } catch (error: any) {
+          console.error(`[JOB ${job.id}] Processing failed:`, error);
+          await storage.updateProcessingJob(job.id, {
+            status: "failed",
+            metadata: {
+              ...job.metadata,
+              errorMessage: error.message,
+            },
+          });
+        }
+      })();
+    } catch (error: any) {
+      console.error("Error creating processing job:", error);
+      res.status(500).json({ error: error.message || "Failed to create processing job" });
     }
   });
 
@@ -215,286 +375,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to fetch job" });
     }
   });
-
-  app.patch("/api/jobs/:id/transcription", async (req, res) => {
-    try {
-      const { transcription } = req.body;
-      const job = await storage.getProcessingJob(req.params.id);
-      
-      if (!job) {
-        return res.status(404).json({ error: "Job not found" });
-      }
-
-      if (!transcription || typeof transcription !== "string") {
-        return res.status(400).json({ error: "Valid transcription text required" });
-      }
-
-      await storage.updateProcessingJob(req.params.id, {
-        editedTranscription: transcription,
-      });
-
-      const updatedJob = await storage.getProcessingJob(req.params.id);
-      res.json(updatedJob);
-    } catch (error: any) {
-      console.error("Error updating transcription:", error);
-      res.status(500).json({ error: "Failed to update transcription" });
-    }
-  });
-
-  app.post("/api/jobs/:id/continue", async (req, res) => {
-    try {
-      if (!process.env.ELEVENLABS_API_KEY) {
-        return res.status(503).json({ 
-          error: "Voice cloning service not configured. Please add your ElevenLabs API key to enable this feature." 
-        });
-      }
-
-      const job = await storage.getProcessingJob(req.params.id);
-      
-      if (!job) {
-        return res.status(404).json({ error: "Job not found" });
-      }
-
-      if (job.status !== "awaiting_review") {
-        return res.status(400).json({ error: "Job is not awaiting review" });
-      }
-
-      await storage.updateProcessingJob(req.params.id, {
-        status: "processing",
-        progress: 70,
-      });
-
-      const updatedJob = await storage.getProcessingJob(req.params.id);
-      res.json(updatedJob);
-
-      continueVoiceGeneration(req.params.id).catch((error) => {
-        console.error("Error continuing voice generation:", error);
-        storage.updateProcessingJob(req.params.id, {
-          status: "failed",
-          metadata: {
-            ...job.metadata,
-            errorMessage: error.message,
-          },
-        });
-      });
-    } catch (error: any) {
-      console.error("Error continuing job:", error);
-      res.status(500).json({ error: "Failed to continue processing" });
-    }
-  });
-
-  app.post("/api/jobs/process-video", upload.single("video"), async (req, res) => {
-    try {
-      if (!process.env.ELEVENLABS_API_KEY) {
-        return res.status(503).json({ 
-          error: "Voice cloning service not configured. Please add your ElevenLabs API key to enable this feature." 
-        });
-      }
-
-      const { voiceCloneId } = req.body;
-      const videoFile = req.file;
-
-      if (!videoFile || !voiceCloneId) {
-        return res.status(400).json({ error: "Video file and voice clone ID required" });
-      }
-
-      const voice = await storage.getVoiceClone(voiceCloneId);
-      if (!voice || voice.status !== "ready" || !voice.elevenLabsVoiceId) {
-        return res.status(400).json({ error: "Voice clone not ready" });
-      }
-
-      const videoMetadata = await ffmpegService.getVideoMetadata(videoFile.path);
-      
-      const job = await storage.createProcessingJob({
-        type: "audio_extraction",
-        status: "processing",
-        progress: 0,
-        videoPath: videoFile.path,
-        voiceCloneId,
-        metadata: {
-          videoFileName: videoFile.originalname,
-          videoDuration: videoMetadata.duration,
-          videoSize: videoMetadata.size,
-        },
-      });
-
-      res.json(job);
-
-      processVideoJob(job.id).catch((error) => {
-        console.error("Error processing video job:", error);
-        storage.updateProcessingJob(job.id, {
-          status: "failed",
-          metadata: {
-            ...job.metadata,
-            errorMessage: error.message,
-          },
-        });
-      });
-    } catch (error: any) {
-      console.error("Error creating processing job:", error);
-      res.status(500).json({ error: error.message || "Failed to create processing job" });
-    }
-  });
-
-  async function continueVoiceGeneration(jobId: string) {
-    const job = await storage.getProcessingJob(jobId);
-    if (!job || !job.extractedAudioPath || !job.voiceCloneId || !job.transcription) {
-      throw new Error("Job not ready for voice generation");
-    }
-
-    try {
-      await storage.updateProcessingJob(jobId, { progress: 70, type: "voice_generation" });
-
-      const voice = await storage.getVoiceClone(job.voiceCloneId);
-      if (!voice || !voice.elevenLabsVoiceId) {
-        throw new Error("Voice clone not found");
-      }
-
-      const textToSynthesize = job.editedTranscription || job.transcription;
-
-      const elevenlabs = new ElevenLabsService();
-      const audioBuffer = await elevenlabs.textToSpeech(textToSynthesize, voice.elevenLabsVoiceId);
-
-      const tempAudioPath = `/tmp/${jobId}_generated.mp3`;
-      await fs.writeFile(tempAudioPath, audioBuffer);
-
-      await storage.updateProcessingJob(jobId, { progress: 80, type: "merging" });
-
-      const audioUploadURL = await objectStorageService.getObjectEntityUploadURL();
-      
-      const audioStream = await fs.readFile(tempAudioPath);
-      const audioUploadResponse = await fetch(audioUploadURL, {
-        method: "PUT",
-        body: audioStream,
-        headers: {
-          "Content-Type": "audio/mpeg",
-        },
-      });
-
-      if (!audioUploadResponse.ok) {
-        throw new Error("Failed to upload generated audio");
-      }
-
-      const audioUrlObj = new URL(audioUploadURL);
-      const audioPathParts = audioUrlObj.pathname.split("/");
-      const audioBucket = audioPathParts[1];
-      const audioObjectPath = audioPathParts.slice(2).join("/");
-      
-      const privateDir = objectStorageService.getPrivateObjectDir();
-      const [privateDirBucket, ...privateDirPathParts] = privateDir.split("/");
-      const privateDirPath = privateDirPathParts.join("/");
-      
-      let generatedAudioPath: string;
-      if (audioBucket === privateDirBucket && audioObjectPath.startsWith(privateDirPath)) {
-        generatedAudioPath = `/objects/${audioObjectPath.replace(privateDirPath + "/", "")}`;
-      } else {
-        generatedAudioPath = `/objects/${audioObjectPath}`;
-      }
-
-      let mergedVideoPath: string | undefined;
-      
-      if (job.videoPath) {
-        const tempMergedPath = `/tmp/${jobId}_merged.mp4`;
-        await ffmpegService.mergeAudioVideo(job.videoPath, tempAudioPath, tempMergedPath);
-
-        await storage.updateProcessingJob(jobId, { progress: 95 });
-
-        const videoUploadURL = await objectStorageService.getObjectEntityUploadURL();
-        const videoStream = await fs.readFile(tempMergedPath);
-        const videoUploadResponse = await fetch(videoUploadURL, {
-          method: "PUT",
-          body: videoStream,
-          headers: {
-            "Content-Type": "video/mp4",
-          },
-        });
-
-        if (!videoUploadResponse.ok) {
-          throw new Error("Failed to upload merged video");
-        }
-
-        const videoUrlObj = new URL(videoUploadURL);
-        const videoPathParts = videoUrlObj.pathname.split("/");
-        const videoBucket = videoPathParts[1];
-        const videoObjectPath = videoPathParts.slice(2).join("/");
-        
-        if (videoBucket === privateDirBucket && videoObjectPath.startsWith(privateDirPath)) {
-          mergedVideoPath = `/objects/${videoObjectPath.replace(privateDirPath + "/", "")}`;
-        } else {
-          mergedVideoPath = `/objects/${videoObjectPath}`;
-        }
-
-        await fs.unlink(tempMergedPath).catch(() => {});
-      }
-
-      await storage.updateProcessingJob(jobId, {
-        progress: 100,
-        status: "completed",
-        generatedAudioPath,
-        mergedVideoPath,
-        metadata: {
-          ...job.metadata,
-          generatedAudioFormat: "mp3",
-          generatedAudioDuration: job.metadata?.videoDuration,
-          hasMergedVideo: !!mergedVideoPath,
-        },
-      });
-
-      await fs.unlink(job.videoPath || "").catch(() => {});
-      await fs.unlink(job.extractedAudioPath).catch(() => {});
-      await fs.unlink(tempAudioPath).catch(() => {});
-    } catch (error: any) {
-      console.error("Error in voice generation:", error);
-      await storage.updateProcessingJob(jobId, {
-        status: "failed",
-        metadata: {
-          ...job.metadata,
-          errorMessage: error.message,
-        },
-      });
-    }
-  }
-
-  async function processVideoJob(jobId: string) {
-    const job = await storage.getProcessingJob(jobId);
-    if (!job || !job.videoPath || !job.voiceCloneId) return;
-
-    try {
-      await storage.updateProcessingJob(jobId, { progress: 10 });
-
-      const audioPath = `/tmp/${jobId}_audio.mp3`;
-      await ffmpegService.extractAudio(job.videoPath, audioPath);
-      
-      await storage.updateProcessingJob(jobId, {
-        progress: 30,
-        extractedAudioPath: audioPath,
-        metadata: {
-          ...job.metadata,
-          audioFormat: "mp3",
-        },
-      });
-
-      await storage.updateProcessingJob(jobId, { progress: 40, type: "transcription" });
-
-      const transcriptionService = new TranscriptionService();
-      const transcription = await transcriptionService.transcribeAudio(audioPath);
-
-      await storage.updateProcessingJob(jobId, {
-        progress: 60,
-        transcription,
-        status: "awaiting_review",
-      });
-    } catch (error: any) {
-      console.error("Error processing video job:", error);
-      await storage.updateProcessingJob(jobId, {
-        status: "failed",
-        metadata: {
-          ...job.metadata,
-          errorMessage: error.message,
-        },
-      });
-    }
-  }
 
   const httpServer = createServer(app);
   return httpServer;

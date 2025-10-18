@@ -6,24 +6,23 @@ import { z } from "zod";
 export const voiceClones = pgTable("voice_clones", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
-  elevenLabsVoiceId: text("eleven_labs_voice_id"),
+  rvcModelUrl: text("rvc_model_url"), // Replicate RVC model URL
+  rvcTrainingId: text("rvc_training_id"), // Replicate training job ID
   sampleCount: integer("sample_count").notNull().default(0),
   samplePaths: jsonb("sample_paths").$type<string[]>().notNull().default([]),
-  status: text("status").notNull().default("pending"), // pending, cloning, ready, failed
+  status: text("status").notNull().default("pending"), // pending, training, ready, failed
   quality: integer("quality"), // 0-100 similarity score
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const processingJobs = pgTable("processing_jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  type: text("type").notNull(), // audio_extraction, transcription, voice_generation
-  status: text("status").notNull().default("pending"), // pending, processing, awaiting_review, completed, failed
+  type: text("type").notNull(), // voice_conversion
+  status: text("status").notNull().default("pending"), // pending, processing, completed, failed
   progress: integer("progress").notNull().default(0), // 0-100
   videoPath: text("video_path"),
   extractedAudioPath: text("extracted_audio_path"),
-  transcription: text("transcription"),
-  editedTranscription: text("edited_transcription"),
-  generatedAudioPath: text("generated_audio_path"),
+  convertedAudioPath: text("converted_audio_path"),
   mergedVideoPath: text("merged_video_path"),
   voiceCloneId: varchar("voice_clone_id").references(() => voiceClones.id),
   metadata: jsonb("metadata").$type<{
@@ -31,9 +30,7 @@ export const processingJobs = pgTable("processing_jobs", {
     videoDuration?: number;
     videoSize?: number;
     audioFormat?: string;
-    audioFileName?: string;
-    generatedAudioFormat?: string;
-    generatedAudioDuration?: number;
+    convertedAudioDuration?: number;
     errorMessage?: string;
   }>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),

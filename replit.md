@@ -1,8 +1,8 @@
-# VoiceSwap - AI Voice Cloning Application
+# VoiceSwap - AI Voice Conversion Application
 
 ## Overview
 
-VoiceSwap is an AI-powered voice cloning and audio replacement application that enables users to clone realistic voices from audio samples and replace synthetic AI voices in videos with authentic-sounding cloned voices. The application provides a professional interface for managing voice clones, processing videos, and generating AI-voiced audio content.
+VoiceSwap is an AI-powered voice conversion application that enables users to train RVC (Retrieval-based Voice Conversion) models from audio samples and convert video audio to match the trained voice while preserving perfect lip-sync timing. The application provides a professional interface for managing voice models, processing videos with voice conversion, and downloading perfectly synced results.
 
 ## User Preferences
 
@@ -72,16 +72,12 @@ Preferred communication style: Simple, everyday language.
 
 ### External Dependencies
 
-**ElevenLabs API**
-- Voice cloning service for creating voice models from audio samples
-- Text-to-speech generation using cloned voices
-- API key-based authentication
-- FormData multipart uploads for audio samples
-
-**OpenAI Whisper API**
-- Audio transcription service for extracting text from video/audio
-- Language-specific transcription (English)
-- Used for creating text scripts from video audio before voice replacement
+**Replicate API (RVC)**
+- Voice model training from audio samples using RVC (Retrieval-based Voice Conversion)
+- Voice-to-voice conversion that preserves timing and prosody perfectly
+- Training cost: ~$0.11 per model (~2 minutes)
+- Conversion cost: ~$0.002 per video (~8 seconds)
+- Maintains exact lip-sync with original video
 
 **FFmpeg**
 - Audio extraction from video files
@@ -176,14 +172,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Current Status
 
-The application is fully functional and production-ready with the following features:
-- ✅ Voice clone creation with ElevenLabs integration
+The application is rebuilt with RVC voice conversion for perfect lip-sync:
+- ✅ RVC voice model training from audio samples
 - ✅ Video upload and audio extraction with FFmpeg
-- ✅ Speech-to-text transcription with OpenAI Whisper
-- ✅ Voice synthesis with cloned voices
+- ✅ Voice-to-voice conversion (preserves timing perfectly)
+- ✅ Audio-video merging with perfect lip-sync
 - ✅ Object storage for file persistence
 - ✅ Real-time progress tracking
 - ✅ Professional UI with dark theme and purple accent
-- ✅ Error handling with user-friendly messages
+- ✅ Replicate API integration
 
-**Next Step:** Add your ELEVENLABS_API_KEY to enable voice cloning and processing features.
+**Key Difference:** Instead of text-to-speech (which changes timing), we use voice conversion that transforms the audio while keeping the exact same timing as the original - resulting in perfect lip-sync!
