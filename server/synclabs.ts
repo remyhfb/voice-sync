@@ -31,8 +31,8 @@ export class SyncLabsService {
       throw new Error("Sync Labs API key not configured");
     }
 
-    // Use lipsync-2 for free tier, upgrade to lipsync-2-pro when on Scale plan
-    const model = options.model || "lipsync-2";
+    // Use lipsync-2-pro for best quality (requires Scale plan or paid credits)
+    const model = options.model || "lipsync-2-pro";
 
     console.log(`[SyncLabs] Starting lip-sync with model: ${model}`);
     console.log(`[SyncLabs] Video: ${videoPath}, Audio: ${audioPath}`);

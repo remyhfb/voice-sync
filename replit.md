@@ -137,16 +137,21 @@ VoiceSwap emphasizes processing transparency through visual feedback and real-ti
 - Targets users with 90% accurate voice acting who need help with final 10% polish
 - Cost: ~$0.05/sec for Sync Labs (~$3/min of video)
 
-**Status:** ✅ Sync Labs API key configured - ready for testing!
+**Status:** ✅ Sync Labs API key configured - using premium model!
 
-**Models Available:**
-- `lipsync-2`: Standard model (default) - works with free tier
+**Model in Use:**
+- `lipsync-2-pro`: **Latest premium model (2025)** - ACTIVE
+  - Pricing: $0.067-$0.083/sec (~$4-$5/min)
+  - Enhanced beard/facial hair handling
+  - Improved teeth generation across frames
+  - Superior detail preservation
+  - 1.5-2x slower processing but highest quality output
+  - Requires Scale plan or paid API credits
+
+**Alternative Model:**
+- `lipsync-2`: Standard model (fallback option)
   - Pricing: $0.04-$0.05/sec (~$2.40-$3/min)
   - Free tier: 5 minutes/month
-- `lipsync-2-pro`: Premium model (2025) - requires Scale plan
-  - Pricing: $0.067-$0.083/sec (~$4-$5/min)
-  - Enhanced beard/teeth/detail preservation
-  - 1.5-2x slower but highest quality
 
 ## Recent Changes (October 18, 2025)
 

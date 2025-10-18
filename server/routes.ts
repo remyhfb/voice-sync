@@ -800,7 +800,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const lipsyncedBuffer = await synclabs.lipSync(
             timeStretchedVideoPath,
             cleanedUserAudioPath,
-            { model: "lipsync-2" }
+            { model: "lipsync-2-pro" } // Using latest premium model for best quality
           );
           
           await fs.writeFile(lipsyncedVideoPath, lipsyncedBuffer);
