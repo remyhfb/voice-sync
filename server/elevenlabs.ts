@@ -124,7 +124,16 @@ export class ElevenLabsService {
       throw new Error("ElevenLabs API key not configured");
     }
 
+    // Voice settings for full voice conversion (1.0 = complete voice replacement)
+    const voiceSettings = {
+      stability: 0.5,
+      similarity_boost: 0.75,
+      voice_conversion_strength: 1.0, // Full voice replacement (default 0.3 mixes voices)
+      ...options.voiceSettings,
+    };
+    
     console.log(`[S2S] Converting speech with voice: ${voiceId}, audio: ${audioFilePath}`);
+    console.log(`[S2S] Voice settings:`, JSON.stringify(voiceSettings));
 
     return new Promise((resolve, reject) => {
       const formData = new FormData();
@@ -138,13 +147,6 @@ export class ElevenLabsService {
       // Enable background noise removal for cleaner output
       formData.append("remove_background_noise", (options.removeBackgroundNoise !== false).toString());
       
-      // Voice settings for full voice conversion (1.0 = complete voice replacement)
-      const voiceSettings = {
-        stability: 0.5,
-        similarity_boost: 0.75,
-        voice_conversion_strength: 1.0, // Full voice replacement (default 0.3 mixes voices)
-        ...options.voiceSettings,
-      };
       formData.append("voice_settings", JSON.stringify(voiceSettings));
 
       formData.submit(
