@@ -304,16 +304,26 @@ export class SegmentAligner {
         alignment.userSegment.text
       );
 
-      // Calculate severity
+      // Calculate severity based on USER-ACTIONABLE issues only
+      // 1. Text mismatch - user said wrong words
+      // 2. Extreme time-stretching - our tech couldn't fully fix it (clamped)
       let severity: "critical" | "major" | "minor" | "perfect";
-      if (Math.abs(ratio - 1.0) < 0.05) {
-        severity = "perfect"; // Within 5%
-      } else if (Math.abs(ratio - 1.0) < 0.15) {
-        severity = "minor"; // Within 15%
-      } else if (Math.abs(ratio - 1.0) < 0.30) {
-        severity = "major"; // Within 30%
+      
+      const wasClamped = appliedRatio !== ratio; // We had to clamp = user needs to re-record
+      const hasTextMismatch = textSimilarity < 0.7; // User said different words
+      
+      if (wasClamped || textSimilarity < 0.3) {
+        // Critical: We couldn't fix it OR completely wrong words
+        severity = "critical";
+      } else if (hasTextMismatch) {
+        // Major: Said different words but we could still process
+        severity = "major";
+      } else if (textSimilarity < 0.9) {
+        // Minor: Slight word differences (filler words, etc)
+        severity = "minor";
       } else {
-        severity = "critical"; // >30% off
+        // Perfect: Good match, all automatic fixes worked
+        severity = "perfect";
       }
 
       // Calculate speed change description
@@ -401,54 +411,58 @@ export class SegmentAligner {
       overallTiming = "perfect";
     }
 
-    // Generate recommendations
+    // Generate recommendations - ONLY for user-actionable issues
     const recommendations: string[] = [];
     
-    if (alignmentQuality === "excellent") {
-      recommendations.push("🎉 Excellent alignment! Your timing closely matches the VEO video.");
-    } else if (alignmentQuality === "good") {
-      recommendations.push("✅ Good alignment overall. Minor adjustments applied.");
-    } else if (alignmentQuality === "acceptable") {
-      recommendations.push("⚠️ Acceptable alignment with some timing differences. Consider re-recording problematic segments.");
+    // Count text mismatches and clamped segments
+    const textMismatches = segments.filter(s => s.textSimilarity < 0.7).length;
+    const clampedSegments = segments.filter(s => s.appliedRatio !== s.timeStretchRatio).length;
+    
+    if (criticalIssues === 0 && majorIssues === 0) {
+      recommendations.push("✅ Great job! Your voice acting matched the video well. All timing adjustments were handled automatically.");
     } else {
-      recommendations.push("❌ Poor alignment detected. Your voice timing significantly differs from the video. Please re-record with timing closer to the VEO video.");
+      if (textMismatches > 0) {
+        recommendations.push(`⚠️ ${textMismatches} segment${textMismatches > 1 ? 's' : ''} have word mismatches - you said different words than VEO. Re-record these to match the script exactly.`);
+      }
+      
+      if (clampedSegments > 0) {
+        recommendations.push(`🚨 ${clampedSegments} segment${clampedSegments > 1 ? 's' : ''} had extreme timing differences that couldn't be fully corrected. Re-record these with timing closer to VEO.`);
+      }
+      
+      if (criticalIssues === 0 && majorIssues > 0) {
+        recommendations.push("ℹ️ Some minor word differences detected, but processing was successful. No action needed unless you want perfect text matching.");
+      }
     }
 
-    if (overallTiming === "too_slow") {
-      recommendations.push(`🐌 You're speaking ${Math.round((avgRatio - 1) * 100)}% slower than VEO on average. Try speeding up your delivery.`);
-    } else if (overallTiming === "too_fast") {
-      recommendations.push(`🏃 You're speaking ${Math.round((1 - avgRatio) * 100)}% faster than VEO on average. Try slowing down your delivery.`);
-    }
-
-    if (criticalIssues > 0) {
-      recommendations.push(`🚨 ${criticalIssues} segment${criticalIssues > 1 ? 's' : ''} with critical timing issues (>30% off). Focus on these first.`);
-    }
-
-    if (majorIssues > 0) {
-      recommendations.push(`⚠️ ${majorIssues} segment${majorIssues > 1 ? 's' : ''} with major timing issues (15-30% off). Work on improving these.`);
-    }
-
-    // Identify top problem segments
+    // Identify top problem segments - ONLY ones with user-actionable issues
     const problemSegments = segments
       .filter(s => s.severity === "critical" || s.severity === "major")
-      .sort((a, b) => Math.abs(b.timeStretchRatio - 1.0) - Math.abs(a.timeStretchRatio - 1.0))
+      .sort((a, b) => {
+        // Prioritize text mismatches, then clamping issues
+        const aScore = (a.textSimilarity < 0.7 ? 100 : 0) + (a.appliedRatio !== a.timeStretchRatio ? 50 : 0);
+        const bScore = (b.textSimilarity < 0.7 ? 100 : 0) + (b.appliedRatio !== b.timeStretchRatio ? 50 : 0);
+        return bScore - aScore;
+      })
       .slice(0, 5)
       .map(seg => {
         let issue: string;
         let recommendation: string;
 
-        if (seg.timeStretchRatio > 1.3) {
-          issue = `You're ${Math.round((seg.timeStretchRatio - 1) * 100)}% slower than VEO`;
-          recommendation = "Speed up this line significantly - try saying it faster";
-        } else if (seg.timeStretchRatio > 1.1) {
-          issue = `You're ${Math.round((seg.timeStretchRatio - 1) * 100)}% slower than VEO`;
-          recommendation = "Increase your pace for this line";
-        } else if (seg.timeStretchRatio < 0.7) {
-          issue = `You're ${Math.round((1 - seg.timeStretchRatio) * 100)}% faster than VEO`;
-          recommendation = "Slow down this line significantly - take your time";
+        const wasClamped = seg.appliedRatio !== seg.timeStretchRatio;
+        const hasTextMismatch = seg.textSimilarity < 0.7;
+
+        if (hasTextMismatch && wasClamped) {
+          issue = `Wrong words AND extreme timing (${Math.abs(Math.round((seg.timeStretchRatio - 1) * 100))}% off, clamped to ${Math.abs(Math.round((seg.appliedRatio - 1) * 100))}%)`;
+          recommendation = "Re-record this line matching the exact words and timing of VEO";
+        } else if (hasTextMismatch) {
+          issue = `Said different words (${Math.round(seg.textSimilarity * 100)}% match)`;
+          recommendation = `Match VEO's script exactly: "${seg.veoText}"`;
+        } else if (wasClamped) {
+          issue = `Extreme timing difference (${Math.abs(Math.round((seg.timeStretchRatio - 1) * 100))}% off, clamped to ${Math.abs(Math.round((seg.appliedRatio - 1) * 100))}%)`;
+          recommendation = "Re-record with timing much closer to VEO's delivery";
         } else {
-          issue = `You're ${Math.round((1 - seg.timeStretchRatio) * 100)}% faster than VEO`;
-          recommendation = "Decrease your pace for this line";
+          issue = "Timing variance within acceptable range";
+          recommendation = "This was automatically corrected - no action needed";
         }
 
         return {
