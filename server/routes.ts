@@ -284,13 +284,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             },
           });
 
-          const finalVideoUrl = videoUploadUrl.split('?')[0];
+          // Extract the object path and convert to /objects/ URL
+          const urlParts = videoUploadUrl.split('?')[0].split('/');
+          const objectId = urlParts[urlParts.length - 1];
+          const finalVideoPath = `/objects/uploads/${objectId}`;
 
           await storage.updateProcessingJob(job.id, {
             videoPath: null, // Clear temp file path
             extractedAudioPath: null, // Clear temp file path
             convertedAudioPath: null, // Clear temp file path
-            mergedVideoPath: finalVideoUrl,
+            mergedVideoPath: finalVideoPath,
             status: "completed",
             progress: 100,
           });
