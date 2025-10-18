@@ -171,7 +171,7 @@ export default function VoicesPage() {
               Create Voice Clone
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
             <DialogHeader>
               <DialogTitle>Create New Voice Clone</DialogTitle>
               <DialogDescription>
@@ -179,7 +179,7 @@ export default function VoicesPage() {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-6 py-4">
+            <div className="flex-1 overflow-y-auto space-y-6 py-4 pr-2">
               <div className="space-y-2">
                 <Label htmlFor="voice-name">Voice Name</Label>
                 <Input
@@ -230,7 +230,7 @@ export default function VoicesPage() {
               </div>
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="flex-shrink-0">
               <Button
                 variant="outline"
                 onClick={() => setIsCreateDialogOpen(false)}
