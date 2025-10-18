@@ -16,6 +16,7 @@ export default function CreatePage() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>("");
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [pipeline, setPipeline] = useState<"s2s" | "bark">("bark"); // Default to Bark pipeline
   const { toast } = useToast();
 
   const { data: voices = [], isLoading: voicesLoading } = useQuery<VoiceClone[]>({
@@ -38,12 +39,16 @@ export default function CreatePage() {
   });
 
   const processVideoMutation = useMutation({
-    mutationFn: async (data: { videoFile: File; voiceCloneId: string }) => {
+    mutationFn: async (data: { videoFile: File; voiceCloneId: string; pipeline: "s2s" | "bark" }) => {
       const formData = new FormData();
       formData.append("video", data.videoFile);
       formData.append("voiceCloneId", data.voiceCloneId);
 
-      const response = await fetch("/api/jobs/process-video", {
+      const endpoint = data.pipeline === "bark" 
+        ? "/api/jobs/process-video-bark"
+        : "/api/jobs/process-video";
+
+      const response = await fetch(endpoint, {
         method: "POST",
         body: formData,
       });
@@ -60,7 +65,9 @@ export default function CreatePage() {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       toast({
         title: "Processing started",
-        description: "Your video is being processed with RVC voice conversion.",
+        description: pipeline === "bark" 
+          ? "Video processing with Bark neural vocoder + S2S" 
+          : "Video processing with ElevenLabs S2S",
       });
     },
     onError: (error: Error) => {
@@ -91,6 +98,7 @@ export default function CreatePage() {
     processVideoMutation.mutate({
       videoFile,
       voiceCloneId: selectedVoiceId,
+      pipeline,
     });
   };
 
@@ -106,7 +114,50 @@ export default function CreatePage() {
     const job = currentJob;
     if (!job) return [];
 
-    const steps: ProcessingStep[] = [
+    // Bark pipeline steps (voice_conversion_bark)
+    if (job.type === "voice_conversion_bark") {
+      return [
+        {
+          id: "extraction",
+          label: "Audio Extraction",
+          status: job.progress >= 15 ? "completed" : job.status === "processing" ? "processing" : "pending",
+          estimatedTime: "~15 seconds",
+        },
+        {
+          id: "isolation",
+          label: "Vocal Isolation",
+          status: job.progress >= 25 ? "completed" : job.progress >= 15 ? "processing" : "pending",
+          estimatedTime: "~15 seconds",
+        },
+        {
+          id: "transcription",
+          label: "Transcribing with Whisper",
+          status: job.progress >= 40 ? "completed" : job.progress >= 25 ? "processing" : "pending",
+          estimatedTime: "~30 seconds",
+        },
+        {
+          id: "bark",
+          label: "Generating Natural Speech (Bark)",
+          status: job.progress >= 65 ? "completed" : job.progress >= 40 ? "processing" : "pending",
+          estimatedTime: "~1 minute",
+        },
+        {
+          id: "s2s",
+          label: "Converting to Cloned Voice (S2S)",
+          status: job.progress >= 85 ? "completed" : job.progress >= 65 ? "processing" : "pending",
+          estimatedTime: "~30 seconds",
+        },
+        {
+          id: "merging",
+          label: "Video Merging",
+          status: job.status === "completed" ? "completed" : job.progress >= 85 ? "processing" : "pending",
+          estimatedTime: "~20 seconds",
+        },
+      ];
+    }
+
+    // Standard S2S pipeline steps
+    return [
       {
         id: "extraction",
         label: "Audio Extraction",
@@ -138,8 +189,6 @@ export default function CreatePage() {
         estimatedTime: "~30 seconds",
       },
     ];
-
-    return steps;
   };
 
   return (
@@ -204,6 +253,51 @@ export default function CreatePage() {
                   No voice clones available. Create one first in the "My Voices" tab.
                 </p>
               )}
+            </div>
+
+            <Separator className="my-6" />
+
+            <h2 className="text-xl font-semibold mb-4">
+              Step 3: Choose Processing Pipeline
+            </h2>
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <button
+                  data-testid="button-pipeline-bark"
+                  onClick={() => setPipeline("bark")}
+                  className={`p-4 rounded-lg border-2 transition-all text-left ${
+                    pipeline === "bark"
+                      ? "border-primary bg-primary/10"
+                      : "border-border hover-elevate"
+                  }`}
+                >
+                  <div className="font-semibold mb-1">🔥 Bark Neural Vocoder (Recommended)</div>
+                  <div className="text-sm text-muted-foreground">
+                    Transcribe → Generate natural speech → Convert to clone
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    Best for VEO 3.1 synthetic voices
+                  </div>
+                </button>
+                
+                <button
+                  data-testid="button-pipeline-s2s"
+                  onClick={() => setPipeline("s2s")}
+                  className={`p-4 rounded-lg border-2 transition-all text-left ${
+                    pipeline === "s2s"
+                      ? "border-primary bg-primary/10"
+                      : "border-border hover-elevate"
+                  }`}
+                >
+                  <div className="font-semibold mb-1">⚡ Two-Stage S2S</div>
+                  <div className="text-sm text-muted-foreground">
+                    Normalize voice → Convert to clone
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    Works well for real human voices
+                  </div>
+                </button>
+              </div>
             </div>
 
             <div className="mt-6 flex justify-end">

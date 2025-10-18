@@ -8,6 +8,7 @@ import { storage } from "./storage";
 import { ElevenLabsService } from "./elevenlabs";
 import { FFmpegService } from "./ffmpeg";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { ReplicateService } from "./replicate";
 
 const upload = multer({ dest: "/tmp/uploads/" });
 const ffmpegService = new FFmpegService();
@@ -400,6 +401,165 @@ export async function registerRoutes(app: Express): Promise<Server> {
       })();
     } catch (error: any) {
       console.error("Error creating processing job:", error);
+      res.status(500).json({ error: error.message || "Failed to create processing job" });
+    }
+  });
+
+  // Process video with Bark-based pipeline (HuBERT alternative)
+  app.post("/api/jobs/process-video-bark", upload.single("video"), async (req, res) => {
+    try {
+      const videoFile = req.file;
+      const voiceCloneId = req.body.voiceCloneId;
+
+      if (!videoFile) {
+        return res.status(400).json({ error: "No video file provided" });
+      }
+
+      if (!voiceCloneId) {
+        return res.status(400).json({ error: "No voice clone ID provided" });
+      }
+
+      const voice = await storage.getVoiceClone(voiceCloneId);
+      if (!voice) {
+        return res.status(404).json({ error: "Voice clone not found" });
+      }
+
+      if (voice.status !== "ready") {
+        return res.status(400).json({ error: "Voice clone not ready" });
+      }
+
+      const videoMetadata = await ffmpegService.getVideoMetadata(videoFile.path);
+      
+      const job = await storage.createProcessingJob({
+        type: "voice_conversion_bark",
+        status: "processing",
+        progress: 0,
+        videoPath: videoFile.path,
+        voiceCloneId,
+        metadata: {
+          videoFileName: videoFile.originalname,
+          videoDuration: videoMetadata.duration,
+          videoSize: videoMetadata.size,
+        },
+      });
+
+      res.json(job);
+
+      // Process video in background
+      (async () => {
+        const extractedAudioPath = `/tmp/uploads/${job.id}_extracted.m4a`;
+        const isolatedAudioPath = `/tmp/uploads/${job.id}_isolated.mp3`;
+        const barkAudioPath = `/tmp/uploads/${job.id}_bark.wav`;
+        const convertedAudioPath = `/tmp/uploads/${job.id}_converted.mp3`;
+        const mergedVideoPath = `/tmp/uploads/${job.id}_final.mp4`;
+        
+        try {
+          // Step 1: Extract audio (0-15%)
+          console.log(`[JOB ${job.id}] [BARK] Extracting audio from video`);
+          await ffmpegService.extractAudio(videoFile.path, extractedAudioPath);
+          await storage.updateProcessingJob(job.id, {
+            extractedAudioPath,
+            progress: 15,
+          });
+
+          // Step 2: Isolate vocals (15-25%)
+          console.log(`[JOB ${job.id}] [BARK] Isolating vocals`);
+          const elevenlabs = new ElevenLabsService();
+          const isolatedBuffer = await elevenlabs.isolateVoice(extractedAudioPath);
+          await fs.writeFile(isolatedAudioPath, isolatedBuffer);
+          await storage.updateProcessingJob(job.id, { progress: 25 });
+
+          // Step 3: Transcribe with Whisper (25-40%)
+          console.log(`[JOB ${job.id}] [BARK] Transcribing audio with Whisper`);
+          const replicate = new ReplicateService();
+          const transcription = await replicate.transcribe(isolatedAudioPath);
+          console.log(`[JOB ${job.id}] [BARK] Transcription length: ${transcription.length} characters`);
+          await storage.updateProcessingJob(job.id, { progress: 40 });
+
+          // Step 4: Generate natural speech with Bark (40-65%)
+          console.log(`[JOB ${job.id}] [BARK] Generating natural speech with Bark`);
+          const barkBuffer = await replicate.generateSpeech(transcription);
+          await fs.writeFile(barkAudioPath, barkBuffer);
+          console.log(`[JOB ${job.id}] [BARK] Bark audio: ${barkBuffer.length} bytes`);
+          await storage.updateProcessingJob(job.id, { progress: 65 });
+
+          // Step 5: Convert Bark audio to cloned voice with S2S (65-85%)
+          console.log(`[JOB ${job.id}] [BARK] Converting Bark speech to cloned voice`);
+          const convertedBuffer = await elevenlabs.speechToSpeech(
+            voice.elevenLabsVoiceId!,
+            barkAudioPath,
+            { removeBackgroundNoise: false }
+          );
+          await fs.writeFile(convertedAudioPath, convertedBuffer);
+          console.log(`[JOB ${job.id}] [BARK] Final audio: ${convertedBuffer.length} bytes`);
+          await storage.updateProcessingJob(job.id, {
+            convertedAudioPath,
+            progress: 85,
+          });
+
+          // Step 6: Merge audio with video (85-100%)
+          console.log(`[JOB ${job.id}] [BARK] Merging audio with video`);
+          await ffmpegService.mergeAudioVideo(
+            videoFile.path,
+            convertedAudioPath,
+            mergedVideoPath
+          );
+
+          // Upload final video to object storage
+          const objectStorageService = new ObjectStorageService();
+          const videoUploadUrl = await objectStorageService.getObjectEntityUploadURL();
+          const videoBuffer = await fs.readFile(mergedVideoPath);
+          const videoStats = await fs.stat(mergedVideoPath);
+          
+          await fetch(videoUploadUrl, {
+            method: 'PUT',
+            body: videoBuffer,
+            headers: {
+              'Content-Type': 'video/mp4',
+              'Content-Length': videoStats.size.toString(),
+            },
+          });
+
+          const urlParts = videoUploadUrl.split('?')[0].split('/');
+          const objectId = urlParts[urlParts.length - 1];
+          const finalVideoPath = `/objects/uploads/${objectId}`;
+
+          await storage.updateProcessingJob(job.id, {
+            videoPath: null,
+            extractedAudioPath: null,
+            convertedAudioPath: null,
+            mergedVideoPath: finalVideoPath,
+            status: "completed",
+            progress: 100,
+          });
+
+          console.log(`[JOB ${job.id}] [BARK] Processing completed successfully`);
+        } catch (error: any) {
+          console.error(`[JOB ${job.id}] [BARK] Error:`, error.message);
+          console.error(`[JOB ${job.id}] [BARK] Stack trace:`, error.stack);
+          await storage.updateProcessingJob(job.id, {
+            status: "failed",
+            videoPath: null,
+            extractedAudioPath: null,
+            convertedAudioPath: null,
+            metadata: {
+              ...job.metadata,
+              errorMessage: error.message,
+              errorStack: error.stack?.substring(0, 500),
+            },
+          });
+        } finally {
+          // Cleanup temp files
+          await fs.unlink(videoFile.path).catch(() => {});
+          await fs.unlink(extractedAudioPath).catch(() => {});
+          await fs.unlink(isolatedAudioPath).catch(() => {});
+          await fs.unlink(barkAudioPath).catch(() => {});
+          await fs.unlink(convertedAudioPath).catch(() => {});
+          await fs.unlink(mergedVideoPath).catch(() => {});
+        }
+      })();
+    } catch (error: any) {
+      console.error("Error creating Bark processing job:", error);
       res.status(500).json({ error: error.message || "Failed to create processing job" });
     }
   });
