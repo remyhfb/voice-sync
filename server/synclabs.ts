@@ -69,7 +69,7 @@ export class SyncLabsService {
   ): Promise<string> {
     return new Promise((resolve, reject) => {
       const payload = JSON.stringify({
-        inputs: [
+        input: [
           { type: "video", url: videoUrl },
           { type: "audio", url: audioUrl },
         ],
