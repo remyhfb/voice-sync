@@ -200,19 +200,31 @@ export default function VoicesPage() {
                   multiple
                   onFilesSelected={setAudioSamples}
                   title="Upload Audio Samples"
-                  description="Upload clear audio recordings with natural speech, emotion, and varied tone. MP3, WAV, M4A supported. Max 11MB per file."
+                  description="Upload 1-2 minute clips of clear audio. Multiple short clips work better than one long file! MP3, WAV, M4A supported."
                   icon="audio"
                 />
               </div>
 
+              <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 space-y-2">
+                <h4 className="text-sm font-semibold text-destructive flex items-center gap-2">
+                  <Mic className="h-4 w-4" />
+                  IMPORTANT: Audio Length Requirements
+                </h4>
+                <ul className="text-sm text-destructive space-y-1 list-disc list-inside">
+                  <li><strong>Optimal:</strong> 1-2 minutes per file</li>
+                  <li><strong>Maximum:</strong> 3 minutes (longer files REDUCE quality)</li>
+                  <li><strong>Best practice:</strong> Upload multiple 1-2 min clips instead of one long file</li>
+                </ul>
+              </div>
+              
               <div className="p-4 rounded-lg bg-muted/50 space-y-2">
                 <h4 className="text-sm font-medium flex items-center gap-2">
                   <Mic className="h-4 w-4 text-primary" />
                   Tips for Best Quality
                 </h4>
                 <ul className="text-xs text-muted-foreground space-y-1 ml-6 list-disc">
-                  <li>Use 3-5 minutes of audio for optimal results</li>
-                  <li>Ensure clear audio with minimal background noise</li>
+                  <li>Clean audio without background noise, reverb, or echo</li>
+                  <li>Single speaker only (no music or other voices)</li>
                   <li>Include varied emotion, tone, and speaking styles</li>
                   <li>Natural pauses and inflection improve authenticity</li>
                 </ul>

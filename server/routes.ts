@@ -136,7 +136,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const result = await elevenlabs.cloneVoice(
             name,
             samplePaths,
-            `Voice clone for ${name}`
+            `Voice clone for ${name}`,
+            {
+              language: "en",
+              use_case: "audiobook"
+            }
           );
 
           await storage.updateVoiceClone(voice.id, {

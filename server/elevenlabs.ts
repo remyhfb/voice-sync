@@ -14,6 +14,13 @@ export class ElevenLabsService {
     name: string,
     files: string[],
     description?: string,
+    labels?: {
+      language?: string;
+      accent?: string;
+      gender?: string;
+      age?: string;
+      use_case?: string;
+    }
   ): Promise<{ voice_id: string }> {
     if (!this.apiKey) {
       throw new Error("ElevenLabs API key not configured");
@@ -24,6 +31,20 @@ export class ElevenLabsService {
       formData.append("name", name);
       if (description) {
         formData.append("description", description);
+      }
+      
+      // Add labels to help ElevenLabs optimize voice quality
+      if (labels) {
+        const labelsObj: Record<string, string> = {};
+        if (labels.language) labelsObj.language = labels.language;
+        if (labels.accent) labelsObj.accent = labels.accent;
+        if (labels.gender) labelsObj.gender = labels.gender;
+        if (labels.age) labelsObj.age = labels.age;
+        if (labels.use_case) labelsObj.use_case = labels.use_case;
+        
+        if (Object.keys(labelsObj).length > 0) {
+          formData.append("labels", JSON.stringify(labelsObj));
+        }
       }
 
       files.forEach((filePath) => {
