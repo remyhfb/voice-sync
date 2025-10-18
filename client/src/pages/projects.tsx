@@ -11,6 +11,7 @@ import { useState } from "react";
 export default function ProjectsPage() {
   const { data: projects = [], isLoading } = useQuery<ProcessingJob[]>({
     queryKey: ["/api/jobs"],
+    refetchInterval: 2000, // Poll every 2 seconds for real-time updates
   });
 
   const formatDuration = (seconds: number) => {
