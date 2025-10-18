@@ -289,4 +289,62 @@ export class ElevenLabsService {
       throw new Error(`ElevenLabs API error: ${response.status}`);
     }
   }
+
+  async isolateVoice(audioFilePath: string): Promise<Buffer> {
+    if (!this.apiKey) {
+      throw new Error("ElevenLabs API key not configured");
+    }
+
+    console.log(`[Audio Isolation] Isolating vocals from: ${audioFilePath}`);
+
+    return new Promise((resolve, reject) => {
+      const formData = new FormData();
+      formData.append("audio", fs.createReadStream(audioFilePath), {
+        filename: "audio.m4a",
+        contentType: "audio/mp4",
+      });
+
+      formData.submit(
+        {
+          protocol: "https:",
+          host: "api.elevenlabs.io",
+          path: "/v1/audio-isolation",
+          method: "POST",
+          headers: {
+            "xi-api-key": this.apiKey,
+          },
+        },
+        (err, response) => {
+          if (err) {
+            return reject(new Error(`ElevenLabs Audio Isolation error: ${err.message}`));
+          }
+
+          const chunks: Buffer[] = [];
+          response.on("data", (chunk) => {
+            chunks.push(chunk);
+          });
+
+          response.on("end", () => {
+            console.log(`[Audio Isolation] Response status: ${response.statusCode}`);
+            
+            if (response.statusCode && response.statusCode >= 200 && response.statusCode < 300) {
+              const audioBuffer = Buffer.concat(chunks);
+              console.log(`[Audio Isolation] Isolated audio: ${audioBuffer.length} bytes`);
+              resolve(audioBuffer);
+            } else {
+              const errorText = Buffer.concat(chunks).toString();
+              console.log(`[Audio Isolation] Error response:`, errorText);
+              reject(
+                new Error(`ElevenLabs Audio Isolation error: ${response.statusCode} - ${errorText}`)
+              );
+            }
+          });
+
+          response.on("error", (error) => {
+            reject(new Error(`ElevenLabs Audio Isolation error: ${error.message}`));
+          });
+        }
+      );
+    });
+  }
 }

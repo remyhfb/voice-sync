@@ -278,40 +278,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process video in background
       (async () => {
         const extractedAudioPath = `/tmp/uploads/${job.id}_extracted.m4a`; // Preserve original audio format
+        const isolatedAudioPath = `/tmp/uploads/${job.id}_isolated.mp3`; // Isolated vocals only
         const convertedAudioPath = `/tmp/uploads/${job.id}_converted.mp3`;
         const mergedVideoPath = `/tmp/uploads/${job.id}_final.mp4`;
         
         try {
-          // Step 1: Extract audio without any conversion (0-30%)
-          console.log(`[JOB ${job.id}] Extracting audio from video (no conversion)`);
+          // Step 1: Extract audio without any conversion (0-20%)
+          console.log(`[JOB ${job.id}] Extracting audio from video`);
           await ffmpegService.extractAudio(videoFile.path, extractedAudioPath);
           
           await storage.updateProcessingJob(job.id, {
             extractedAudioPath,
-            progress: 30,
-            metadata: {
-              ...job.metadata,
-              audioFormat: "mp3",
-            },
+            progress: 20,
           });
 
-          // Step 2: Speech-to-Speech conversion with ElevenLabs (30-80%)
-          console.log(`[JOB ${job.id}] Converting voice with ElevenLabs S2S`);
-          console.log(`[JOB ${job.id}] Voice ID: ${voice.elevenLabsVoiceId}`);
-          console.log(`[JOB ${job.id}] Voice name: ${voice.name}`);
-          console.log(`[JOB ${job.id}] Extracted audio path: ${extractedAudioPath}`);
+          // Step 2: Isolate vocals (remove background music/SFX) (20-40%)
+          console.log(`[JOB ${job.id}] Isolating vocals (removing background music/SFX)`);
+          const elevenlabs = new ElevenLabsService();
+          const isolatedBuffer = await elevenlabs.isolateVoice(extractedAudioPath);
+          await fs.writeFile(isolatedAudioPath, isolatedBuffer);
           
-          // Check extracted audio file
-          const audioStats = await fs.stat(extractedAudioPath);
-          console.log(`[JOB ${job.id}] Extracted audio size: ${audioStats.size} bytes`);
+          const isolatedStats = await fs.stat(isolatedAudioPath);
+          console.log(`[JOB ${job.id}] Isolated vocals size: ${isolatedStats.size} bytes`);
           
           await storage.updateProcessingJob(job.id, { progress: 40 });
 
-          const elevenlabs = new ElevenLabsService();
+          // Step 3: Speech-to-Speech conversion with ElevenLabs (40-80%)
+          console.log(`[JOB ${job.id}] Converting voice with ElevenLabs S2S`);
+          console.log(`[JOB ${job.id}] Voice ID: ${voice.elevenLabsVoiceId}`);
+          console.log(`[JOB ${job.id}] Voice name: ${voice.name}`);
+          console.log(`[JOB ${job.id}] Using isolated vocals: ${isolatedAudioPath}`);
+          
           const convertedBuffer = await elevenlabs.speechToSpeech(
             voice.elevenLabsVoiceId!,
-            extractedAudioPath,
-            { removeBackgroundNoise: true }
+            isolatedAudioPath, // Use isolated vocals instead of raw extracted audio
+            { removeBackgroundNoise: false } // Already isolated, no need for additional noise removal
           );
           
           console.log(`[JOB ${job.id}] S2S conversion completed, output size: ${convertedBuffer.length} bytes`);
@@ -378,6 +379,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Always cleanup temp files
           await fs.unlink(videoFile.path).catch(() => {});
           await fs.unlink(extractedAudioPath).catch(() => {});
+          await fs.unlink(isolatedAudioPath).catch(() => {});
           await fs.unlink(convertedAudioPath).catch(() => {});
           await fs.unlink(mergedVideoPath).catch(() => {});
         }
