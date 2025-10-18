@@ -171,12 +171,11 @@ export default function VoicesPage() {
               Create Voice Clone
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Create New Voice Clone</DialogTitle>
               <DialogDescription>
-                Upload audio samples to create a realistic voice clone. For best results,
-                use 3-5 minutes of clear audio with varied emotion and tone.
+                Upload 1-2 minute audio clips to create a realistic voice clone. Multiple short clips work better than one long file!
               </DialogDescription>
             </DialogHeader>
 

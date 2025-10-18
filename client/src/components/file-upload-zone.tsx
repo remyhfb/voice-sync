@@ -104,7 +104,7 @@ export function FileUploadZone({
         onDragOver={handleDrag}
         onDrop={handleDrop}
         className={cn(
-          "relative min-h-64 rounded-lg border-2 border-dashed transition-all",
+          "relative min-h-48 rounded-lg border-2 border-dashed transition-all",
           isDragging
             ? "border-primary bg-primary/5"
             : "border-border hover:border-primary/50 hover:bg-accent/30",
@@ -123,7 +123,7 @@ export function FileUploadZone({
         />
         <label
           htmlFor="file-upload"
-          className="flex flex-col items-center justify-center h-full min-h-64 p-8 cursor-pointer"
+          className="flex flex-col items-center justify-center h-full min-h-48 p-8 cursor-pointer"
         >
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 mb-4">
             <IconComponent className="h-8 w-8 text-primary" />
