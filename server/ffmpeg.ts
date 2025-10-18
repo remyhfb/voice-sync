@@ -415,6 +415,9 @@ export class FFmpegService {
       ffmpeg(inputPath)
         .outputOptions([
           "-filter:v", `setpts=${ratio}*PTS`,
+          "-c:v", "libx264", // Must re-encode when using filters
+          "-preset", "fast", // Fast encoding
+          "-crf", "18", // High quality
           "-an" // No audio in segments
         ])
         .output(outputPath)
