@@ -718,6 +718,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`[JOB ${job.id}] [LIPSYNC] Alignment quality: ${quality.quality}`);
           console.log(`[JOB ${job.id}] [LIPSYNC] Avg ratio: ${quality.avgRatio.toFixed(2)}, Range: ${quality.minRatio.toFixed(2)}-${quality.maxRatio.toFixed(2)}`);
           
+          // Abort if alignment quality is too poor
+          if (quality.quality === "poor") {
+            throw new Error(
+              `Alignment quality is poor (avg ratio: ${quality.avgRatio.toFixed(2)}). ` +
+              `Your voice timing differs too much from VEO video. ` +
+              `Try re-recording with timing closer to the video, or use a different pipeline.`
+            );
+          }
+          
           await storage.updateProcessingJob(job.id, { 
             progress: 45,
             metadata: {

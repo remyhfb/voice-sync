@@ -74,8 +74,8 @@ export class SegmentAligner {
   }
 
   /**
-   * Align VEO video segments with user audio segments
-   * Calculates time-stretch ratios to match user's timing
+   * Align VEO video segments with user audio segments using text similarity
+   * Ensures all VEO segments are processed (no truncation)
    */
   async alignSegments(
     veoSegments: TimeSegment[],
@@ -83,38 +83,144 @@ export class SegmentAligner {
   ): Promise<AlignmentResult[]> {
     const alignments: AlignmentResult[] = [];
 
-    // Simple alignment: match by index (assumes user tried to match VEO timing)
-    // More sophisticated: use text similarity or DTW (Dynamic Time Warping)
-    const minLength = Math.min(veoSegments.length, userSegments.length);
+    // Separate speech and pause segments
+    const veoSpeech = veoSegments.filter(s => s.type === "speech");
+    const userSpeech = userSegments.filter(s => s.type === "speech");
 
-    for (let i = 0; i < minLength; i++) {
-      const veoSeg = veoSegments[i];
-      const userSeg = userSegments[i];
-      
-      const ratio = userSeg.duration / veoSeg.duration;
-      
+    // Align speech segments using text similarity (word matching)
+    const speechAlignments = this.alignSpeechSegments(veoSpeech, userSpeech);
+
+    // Reconstruct full alignment including pauses
+    let veoIndex = 0;
+    let alignmentIndex = 0;
+
+    for (const veoSeg of veoSegments) {
+      if (veoSeg.type === "pause") {
+        // For pauses, find corresponding user pause or use a default ratio
+        const userPause = userSegments.find((u, i) => 
+          i > alignmentIndex - 1 && 
+          i < alignmentIndex + 1 && 
+          u.type === "pause"
+        );
+
+        const ratio = userPause 
+          ? userPause.duration / veoSeg.duration
+          : 1.0; // Default: keep pause duration
+
+        alignments.push({
+          veoSegment: veoSeg,
+          userSegment: userPause || veoSeg, // Use VEO pause if no user pause
+          timeStretchRatio: ratio,
+          method: ratio >= 0.9 && ratio <= 1.1 ? "keep" : ratio > 1.1 ? "stretch" : "compress"
+        });
+      } else {
+        // For speech, use aligned result
+        if (alignmentIndex < speechAlignments.length) {
+          alignments.push(speechAlignments[alignmentIndex]);
+          alignmentIndex++;
+        } else {
+          // If user has fewer speech segments, pad with 1:1 ratio
+          console.warn(`[Aligner] No user segment for VEO speech: "${veoSeg.text}"`);
+          alignments.push({
+            veoSegment: veoSeg,
+            userSegment: veoSeg,
+            timeStretchRatio: 1.0,
+            method: "keep"
+          });
+        }
+      }
+      veoIndex++;
+    }
+
+    return alignments;
+  }
+
+  /**
+   * Align speech segments using text word-level similarity
+   */
+  private alignSpeechSegments(
+    veoSpeech: TimeSegment[],
+    userSpeech: TimeSegment[]
+  ): AlignmentResult[] {
+    const alignments: AlignmentResult[] = [];
+
+    // For each VEO speech segment, find best matching user segment
+    let userIndex = 0;
+
+    for (const veoSeg of veoSpeech) {
+      if (userIndex >= userSpeech.length) {
+        // No more user segments - keep VEO timing
+        console.warn(`[Aligner] Ran out of user segments at VEO: "${veoSeg.text}"`);
+        alignments.push({
+          veoSegment: veoSeg,
+          userSegment: veoSeg,
+          timeStretchRatio: 1.0,
+          method: "keep"
+        });
+        continue;
+      }
+
+      const userSeg = userSpeech[userIndex];
+      const similarity = this.calculateTextSimilarity(veoSeg.text, userSeg.text);
+
+      // If similarity is very low, might be misaligned - try next user segment
+      if (similarity < 0.3 && userIndex < userSpeech.length - 1) {
+        const nextUserSeg = userSpeech[userIndex + 1];
+        const nextSimilarity = this.calculateTextSimilarity(veoSeg.text, nextUserSeg.text);
+        
+        if (nextSimilarity > similarity) {
+          console.log(`[Aligner] Skipping user segment (better match ahead): "${userSeg.text}"`);
+          userIndex++;
+        }
+      }
+
+      const finalUserSeg = userSpeech[userIndex];
+      const ratio = finalUserSeg.duration / veoSeg.duration;
+
       let method: "stretch" | "compress" | "keep";
-      
       if (ratio >= 0.9 && ratio <= 1.1) {
-        // Within 10% - keep as is
         method = "keep";
       } else if (ratio > 1.1) {
-        // User is slower - stretch video to match
         method = "stretch";
       } else {
-        // User is faster - compress video to match
         method = "compress";
       }
 
       alignments.push({
         veoSegment: veoSeg,
-        userSegment: userSeg,
+        userSegment: finalUserSeg,
         timeStretchRatio: ratio,
         method
       });
+
+      userIndex++;
     }
 
     return alignments;
+  }
+
+  /**
+   * Calculate text similarity between two segments (0.0 to 1.0)
+   * Uses simple word overlap metric
+   */
+  private calculateTextSimilarity(text1: string, text2: string): number {
+    const words1 = text1.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+    const words2 = text2.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+
+    if (words1.length === 0 || words2.length === 0) return 0;
+
+    // Count overlapping words
+    const set1 = new Set(words1);
+    const set2 = new Set(words2);
+    let overlap = 0;
+
+    for (const word of set1) {
+      if (set2.has(word)) overlap++;
+    }
+
+    // Jaccard similarity: intersection / union
+    const union = set1.size + set2.size - overlap;
+    return overlap / union;
   }
 
   /**
