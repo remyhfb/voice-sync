@@ -6,8 +6,7 @@ import { z } from "zod";
 export const voiceClones = pgTable("voice_clones", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
-  rvcModelUrl: text("rvc_model_url"), // Replicate RVC model URL
-  rvcTrainingId: text("rvc_training_id"), // Replicate training job ID
+  elevenLabsVoiceId: text("eleven_labs_voice_id"), // ElevenLabs voice ID for S2S
   sampleCount: integer("sample_count").notNull().default(0),
   samplePaths: jsonb("sample_paths").$type<string[]>().notNull().default([]),
   status: text("status").notNull().default("pending"), // pending, training, ready, failed

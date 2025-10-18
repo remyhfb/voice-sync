@@ -84,6 +84,73 @@ export class ElevenLabsService {
     });
   }
 
+  async speechToSpeech(
+    voiceId: string,
+    audioFilePath: string,
+    options: {
+      modelId?: string;
+      removeBackgroundNoise?: boolean;
+    } = {},
+  ): Promise<Buffer> {
+    if (!this.apiKey) {
+      throw new Error("ElevenLabs API key not configured");
+    }
+
+    console.log(`[S2S] Converting speech with voice: ${voiceId}, audio: ${audioFilePath}`);
+
+    return new Promise((resolve, reject) => {
+      const formData = new FormData();
+      formData.append("audio", fs.createReadStream(audioFilePath), {
+        filename: "input.mp3",
+        contentType: "audio/mpeg",
+      });
+      formData.append("model_id", options.modelId || "eleven_english_sts_v2");
+      
+      if (options.removeBackgroundNoise !== undefined) {
+        formData.append("remove_background_noise", options.removeBackgroundNoise.toString());
+      }
+
+      formData.submit(
+        {
+          protocol: "https:",
+          host: "api.elevenlabs.io",
+          path: `/v1/speech-to-speech/${voiceId}`,
+          method: "POST",
+          headers: {
+            "xi-api-key": this.apiKey,
+          },
+        },
+        (err, response) => {
+          if (err) {
+            return reject(new Error(`ElevenLabs S2S error: ${err.message}`));
+          }
+
+          const chunks: Buffer[] = [];
+          response.on("data", (chunk) => {
+            chunks.push(chunk);
+          });
+
+          response.on("end", () => {
+            if (response.statusCode && response.statusCode >= 200 && response.statusCode < 300) {
+              const audioBuffer = Buffer.concat(chunks);
+              console.log(`[S2S] Conversion completed: ${audioBuffer.length} bytes`);
+              resolve(audioBuffer);
+            } else {
+              const errorText = Buffer.concat(chunks).toString();
+              reject(
+                new Error(`ElevenLabs S2S error: ${response.statusCode} - ${errorText}`)
+              );
+            }
+          });
+
+          response.on("error", (error) => {
+            reject(new Error(`ElevenLabs S2S error: ${error.message}`));
+          });
+        }
+      );
+    });
+  }
+
   async textToSpeech(
     text: string,
     voiceId: string,
