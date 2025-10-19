@@ -9,7 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, Loader2, Download, RotateCcw, BarChart3, AlertCircle } from "lucide-react";
+import { Sparkles, Loader2, Download, RotateCcw, BarChart3, AlertCircle, CheckCircle2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { ProcessingJob } from "@shared/schema";
 
@@ -288,18 +288,27 @@ export default function CreatePage() {
 
         {currentJob && (
           <>
-            <Card className="p-6 mb-8">
-              <ProcessingTimeline
-                steps={getProcessingSteps()}
-                currentStepId={
-                  currentJob.progress < 30 ? "extraction" :
-                  currentJob.progress < 80 ? "timestretch" : "upload"
-                }
-              />
-            </Card>
+            {currentJob.status === "processing" && (
+              <Card className="p-6 mb-8">
+                <ProcessingTimeline
+                  steps={getProcessingSteps()}
+                  currentStepId={
+                    currentJob.progress < 30 ? "extraction" :
+                    currentJob.progress < 80 ? "timestretch" : "upload"
+                  }
+                />
+              </Card>
+            )}
 
             {currentJob.status === "completed" && currentJob.mergedVideoPath && (
               <div className="space-y-6">
+                <Alert className="bg-chart-2/10 border-chart-2" data-testid="alert-success">
+                  <CheckCircle2 className="h-5 w-5 text-chart-2" />
+                  <AlertDescription className="text-base">
+                    <strong>Success!</strong> Your lip-synced video is ready. The video has been time-stretched to match your timing and perfectly lip-synced.
+                  </AlertDescription>
+                </Alert>
+
                 <Card>
                   <CardContent className="p-0">
                     <AspectRatio ratio={16/9}>
