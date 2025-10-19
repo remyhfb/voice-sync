@@ -34,12 +34,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const objectFile = await objectStorageService.getObjectEntityFile(req.path);
       
+      // Get file metadata
+      const [metadata] = await objectFile.getMetadata();
+      const fileSize = parseInt(metadata.size as string, 10);
+      
       // Set proper Content-Type for videos
       if (req.path.includes('/uploads/')) {
         res.setHeader('Content-Type', 'video/mp4');
       }
       
-      objectStorageService.downloadObject(objectFile, res);
+      // Support for HTTP Range requests (required for video playback)
+      const range = req.headers.range;
+      
+      if (range) {
+        // Parse Range header (e.g., "bytes=0-1023")
+        const parts = range.replace(/bytes=/, "").split("-");
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        const chunkSize = (end - start) + 1;
+        
+        // Set 206 Partial Content headers
+        res.status(206);
+        res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Content-Length', chunkSize);
+        
+        // Stream the requested byte range
+        objectFile
+          .createReadStream({ start, end })
+          .on("error", (err) => {
+            console.error("Error streaming file range:", err);
+            res.status(500).send("Error streaming file");
+          })
+          .pipe(res);
+      } else {
+        // No Range header - stream entire file
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Content-Length', fileSize);
+        
+        objectStorageService.downloadObject(objectFile, res);
+      }
     } catch (error) {
       console.error("Error accessing object:", error);
       if (error instanceof ObjectNotFoundError) {
