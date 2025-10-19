@@ -1,15 +1,9 @@
-import { type VoiceClone, type InsertVoiceClone, type ProcessingJob, type InsertProcessingJob, voiceClones, processingJobs } from "@shared/schema";
+import { type ProcessingJob, type InsertProcessingJob, processingJobs } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 
 export interface IStorage {
-  getVoiceClone(id: string): Promise<VoiceClone | undefined>;
-  getAllVoiceClones(): Promise<VoiceClone[]>;
-  createVoiceClone(voiceClone: InsertVoiceClone): Promise<VoiceClone>;
-  updateVoiceClone(id: string, updates: Partial<VoiceClone>): Promise<VoiceClone | undefined>;
-  deleteVoiceClone(id: string): Promise<boolean>;
-  
   getProcessingJob(id: string): Promise<ProcessingJob | undefined>;
   getAllProcessingJobs(): Promise<ProcessingJob[]>;
   createProcessingJob(job: InsertProcessingJob): Promise<ProcessingJob>;
@@ -18,46 +12,10 @@ export interface IStorage {
 }
 
 export class MemStorage implements IStorage {
-  private voiceClones: Map<string, VoiceClone>;
   private processingJobs: Map<string, ProcessingJob>;
 
   constructor() {
-    this.voiceClones = new Map();
     this.processingJobs = new Map();
-  }
-
-  async getVoiceClone(id: string): Promise<VoiceClone | undefined> {
-    return this.voiceClones.get(id);
-  }
-
-  async getAllVoiceClones(): Promise<VoiceClone[]> {
-    return Array.from(this.voiceClones.values()).sort((a, b) => 
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-  }
-
-  async createVoiceClone(insertVoiceClone: InsertVoiceClone): Promise<VoiceClone> {
-    const id = randomUUID();
-    const voiceClone: VoiceClone = { 
-      ...insertVoiceClone, 
-      id,
-      createdAt: new Date(),
-    };
-    this.voiceClones.set(id, voiceClone);
-    return voiceClone;
-  }
-
-  async updateVoiceClone(id: string, updates: Partial<VoiceClone>): Promise<VoiceClone | undefined> {
-    const voiceClone = this.voiceClones.get(id);
-    if (!voiceClone) return undefined;
-    
-    const updated = { ...voiceClone, ...updates };
-    this.voiceClones.set(id, updated);
-    return updated;
-  }
-
-  async deleteVoiceClone(id: string): Promise<boolean> {
-    return this.voiceClones.delete(id);
   }
 
   async getProcessingJob(id: string): Promise<ProcessingJob | undefined> {
@@ -73,7 +31,14 @@ export class MemStorage implements IStorage {
   async createProcessingJob(insertJob: InsertProcessingJob): Promise<ProcessingJob> {
     const id = randomUUID();
     const job: ProcessingJob = { 
-      ...insertJob, 
+      type: insertJob.type,
+      status: insertJob.status ?? "pending",
+      progress: insertJob.progress ?? 0,
+      videoPath: insertJob.videoPath ?? null,
+      extractedAudioPath: insertJob.extractedAudioPath ?? null,
+      convertedAudioPath: insertJob.convertedAudioPath ?? null,
+      mergedVideoPath: insertJob.mergedVideoPath ?? null,
+      metadata: insertJob.metadata ?? null,
       id,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -97,33 +62,6 @@ export class MemStorage implements IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  async getVoiceClone(id: string): Promise<VoiceClone | undefined> {
-    const result = await db.select().from(voiceClones).where(eq(voiceClones.id, id));
-    return result[0];
-  }
-
-  async getAllVoiceClones(): Promise<VoiceClone[]> {
-    return db.select().from(voiceClones);
-  }
-
-  async createVoiceClone(insertVoiceClone: InsertVoiceClone): Promise<VoiceClone> {
-    const result = await db.insert(voiceClones).values([insertVoiceClone]).returning();
-    return result[0];
-  }
-
-  async updateVoiceClone(id: string, updates: Partial<VoiceClone>): Promise<VoiceClone | undefined> {
-    const result = await db.update(voiceClones)
-      .set(updates)
-      .where(eq(voiceClones.id, id))
-      .returning();
-    return result[0];
-  }
-
-  async deleteVoiceClone(id: string): Promise<boolean> {
-    const result = await db.delete(voiceClones).where(eq(voiceClones.id, id)).returning();
-    return result.length > 0;
-  }
-
   async getProcessingJob(id: string): Promise<ProcessingJob | undefined> {
     const result = await db.select().from(processingJobs).where(eq(processingJobs.id, id));
     return result[0];
@@ -134,7 +72,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createProcessingJob(insertJob: InsertProcessingJob): Promise<ProcessingJob> {
-    const result = await db.insert(processingJobs).values([insertJob]).returning();
+    const result = await db.insert(processingJobs).values([{
+      ...insertJob,
+      metadata: insertJob.metadata as any, // JSONB allows any valid JSON structure
+    }]).returning();
     return result[0];
   }
 
