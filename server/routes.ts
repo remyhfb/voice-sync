@@ -399,9 +399,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           console.log(`[JOB ${jobId}] [PACING] Starting pacing analysis`);
           
+          // TypeScript: We already checked these exist above, so use non-null assertions
           const report = await analyzer.analyzePacing(
-            job.extractedAudioPath,
-            job.convertedAudioPath
+            job.extractedAudioPath!,
+            job.convertedAudioPath!,
+            objectStorageService
           );
 
           // Store simplified report in metadata (without full word arrays)

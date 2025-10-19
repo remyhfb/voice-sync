@@ -1,5 +1,7 @@
 import OpenAI from "openai";
 import fs from "fs";
+import path from "path";
+import { ObjectStorageService } from "./objectStorage";
 
 // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -219,35 +221,91 @@ export class PacingAnalyzer {
   }
 
   /**
+   * Download audio file from object storage to temporary location
+   */
+  private async downloadAudioFile(objectPath: string, objectStorageService: ObjectStorageService): Promise<string> {
+    console.log(`[PacingAnalyzer] Downloading ${objectPath} to temporary location`);
+    
+    const file = await objectStorageService.getObjectEntityFile(objectPath);
+    const tempFilePath = path.join('/tmp', `pacing_${Date.now()}_${path.basename(objectPath)}`);
+    
+    // Download file to temporary location
+    await new Promise<void>((resolve, reject) => {
+      const writeStream = fs.createWriteStream(tempFilePath);
+      file.createReadStream()
+        .on('error', reject)
+        .pipe(writeStream)
+        .on('finish', resolve)
+        .on('error', reject);
+    });
+    
+    console.log(`[PacingAnalyzer] Downloaded to ${tempFilePath}`);
+    return tempFilePath;
+  }
+
+  /**
    * Main analysis function - orchestrates the entire pacing analysis
    */
-  async analyzePacing(veoAudioPath: string, userAudioPath: string): Promise<PacingAnalysisReport> {
+  async analyzePacing(
+    veoAudioPath: string, 
+    userAudioPath: string,
+    objectStorageService: ObjectStorageService
+  ): Promise<PacingAnalysisReport> {
     console.log(`[PacingAnalyzer] Starting pacing analysis`);
     console.log(`[PacingAnalyzer] VEO audio: ${veoAudioPath}`);
     console.log(`[PacingAnalyzer] User audio: ${userAudioPath}`);
 
-    // Step 1: Transcribe both audio files with word-level timestamps
-    const [veoWords, userWords] = await Promise.all([
-      this.transcribeWithWordTimestamps(veoAudioPath),
-      this.transcribeWithWordTimestamps(userAudioPath)
-    ]);
+    let localVeoPath: string | null = null;
+    let localUserPath: string | null = null;
 
-    console.log(`[PacingAnalyzer] VEO: ${veoWords.length} words, User: ${userWords.length} words`);
+    try {
+      // Download audio files from object storage to temporary locations
+      [localVeoPath, localUserPath] = await Promise.all([
+        this.downloadAudioFile(veoAudioPath, objectStorageService),
+        this.downloadAudioFile(userAudioPath, objectStorageService)
+      ]);
 
-    // Step 2: Group words into phrases
-    const veoPhrases = this.groupWordsIntoPhrases(veoWords);
-    const userPhrases = this.groupWordsIntoPhrases(userWords);
+      // Step 1: Transcribe both audio files with word-level timestamps
+      const [veoWords, userWords] = await Promise.all([
+        this.transcribeWithWordTimestamps(localVeoPath),
+        this.transcribeWithWordTimestamps(localUserPath)
+      ]);
 
-    console.log(`[PacingAnalyzer] VEO: ${veoPhrases.length} phrases, User: ${userPhrases.length} phrases`);
+      console.log(`[PacingAnalyzer] VEO: ${veoWords.length} words, User: ${userWords.length} words`);
 
-    // Step 3: Align and compare phrases
-    const comparisons = this.alignPhrases(veoPhrases, userPhrases);
+      // Step 2: Group words into phrases
+      const veoPhrases = this.groupWordsIntoPhrases(veoWords);
+      const userPhrases = this.groupWordsIntoPhrases(userWords);
 
-    // Step 4: Generate report
-    const report = this.generateReport(comparisons);
+      console.log(`[PacingAnalyzer] VEO: ${veoPhrases.length} phrases, User: ${userPhrases.length} phrases`);
 
-    console.log(`[PacingAnalyzer] Analysis complete. Avg difference: ${report.summary.avgPercentDifference.toFixed(1)}%`);
+      // Step 3: Align and compare phrases
+      const comparisons = this.alignPhrases(veoPhrases, userPhrases);
 
-    return report;
+      // Step 4: Generate report
+      const report = this.generateReport(comparisons);
+
+      console.log(`[PacingAnalyzer] Analysis complete. Avg difference: ${report.summary.avgPercentDifference.toFixed(1)}%`);
+
+      return report;
+    } finally {
+      // Clean up temporary files
+      if (localVeoPath) {
+        try {
+          await fs.promises.unlink(localVeoPath);
+          console.log(`[PacingAnalyzer] Cleaned up ${localVeoPath}`);
+        } catch (err) {
+          console.error(`[PacingAnalyzer] Failed to clean up ${localVeoPath}:`, err);
+        }
+      }
+      if (localUserPath) {
+        try {
+          await fs.promises.unlink(localUserPath);
+          console.log(`[PacingAnalyzer] Cleaned up ${localUserPath}`);
+        } catch (err) {
+          console.error(`[PacingAnalyzer] Failed to clean up ${localUserPath}:`, err);
+        }
+      }
+    }
   }
 }
