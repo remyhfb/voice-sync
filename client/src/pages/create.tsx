@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { FileUploadZone } from "@/components/file-upload-zone";
 import { ProcessingTimeline, ProcessingStep } from "@/components/processing-timeline";
-import AlignmentReport from "@/components/AlignmentReport";
+import { AlignmentReport } from "@/components/AlignmentReport";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
