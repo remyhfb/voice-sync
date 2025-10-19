@@ -1,4 +1,5 @@
 import { ReplicateService } from "./replicate";
+import { logger } from "./logger";
 
 export interface TimeSegment {
   text: string;
@@ -121,7 +122,7 @@ export class SegmentAligner {
           alignmentIndex++;
         } else {
           // If user has fewer speech segments, pad with 1:1 ratio
-          console.warn(`[Aligner] No user segment for VEO speech: "${veoSeg.text}"`);
+          logger.warn("SegmentAligner", "No user segment for VEO speech", { text: veoSeg.text.substring(0, 30) });
           alignments.push({
             veoSegment: veoSeg,
             userSegment: veoSeg,
@@ -151,7 +152,7 @@ export class SegmentAligner {
     for (const veoSeg of veoSpeech) {
       if (userIndex >= userSpeech.length) {
         // No more user segments - keep VEO timing
-        console.warn(`[Aligner] Ran out of user segments at VEO: "${veoSeg.text}"`);
+        logger.warn("SegmentAligner", "Ran out of user segments", { text: veoSeg.text.substring(0, 30) });
         alignments.push({
           veoSegment: veoSeg,
           userSegment: veoSeg,
@@ -170,7 +171,7 @@ export class SegmentAligner {
         const nextSimilarity = this.calculateTextSimilarity(veoSeg.text, nextUserSeg.text);
         
         if (nextSimilarity > similarity) {
-          console.log(`[Aligner] Skipping user segment (better match ahead): "${userSeg.text}"`);
+          logger.debug("SegmentAligner", "Skipping user segment for better match", { text: userSeg.text.substring(0, 30) });
           userIndex++;
         }
       }
@@ -231,11 +232,11 @@ export class SegmentAligner {
   calculateSafeRatio(ratio: number): number {
     // Clamp to FFmpeg safe limits (0.5-2.0x)
     if (ratio < 0.5) {
-      console.warn(`[Aligner] Ratio ${ratio} too low, clamping to 0.5x`);
+      logger.warn("SegmentAligner", "Ratio too low, clamping", { original: ratio, clamped: 0.5 });
       return 0.5;
     }
     if (ratio > 2.0) {
-      console.warn(`[Aligner] Ratio ${ratio} too high, clamping to 2.0x`);
+      logger.warn("SegmentAligner", "Ratio too high, clamping", { original: ratio, clamped: 2.0 });
       return 2.0;
     }
     return ratio;

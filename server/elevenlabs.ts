@@ -137,11 +137,11 @@ export class ElevenLabsService {
     
     const apiPath = `/v1/speech-to-speech/${voiceId}`;
     
-    console.log(`[S2S] Converting speech with voice: ${voiceId}, audio: ${audioFilePath}`);
-    console.log(`[S2S] API endpoint: https://api.elevenlabs.io${apiPath}`);
-    console.log(`[S2S] Voice settings:`, JSON.stringify(voiceSettings));
-    console.log(`[S2S] Model: ${options.modelId || "eleven_multilingual_sts_v2"}`);
-    console.log(`[S2S] Remove background noise: ${options.removeBackgroundNoise !== false}`);
+    logger.info("ElevenLabs", "Starting speech-to-speech conversion", { 
+      voiceId: voiceId.substring(0, 8),
+      model: options.modelId || "eleven_multilingual_sts_v2",
+      removeNoise: options.removeBackgroundNoise !== false
+    });
 
     return new Promise((resolve, reject) => {
       const formData = new FormData();
@@ -178,18 +178,16 @@ export class ElevenLabsService {
           });
 
           response.on("end", () => {
-            console.log(`[S2S] Response status code: ${response.statusCode}`);
-            console.log(`[S2S] Response headers:`, JSON.stringify(response.headers));
-            
             if (response.statusCode && response.statusCode >= 200 && response.statusCode < 300) {
               const audioBuffer = Buffer.concat(chunks);
-              console.log(`[S2S] Conversion completed: ${audioBuffer.length} bytes`);
-              console.log(`[S2S] Content-Type: ${response.headers['content-type']}`);
-              console.log(`[S2S] First 100 bytes:`, audioBuffer.slice(0, 100).toString('hex'));
+              logger.info("ElevenLabs", "S2S conversion complete", { 
+                bytes: audioBuffer.length,
+                contentType: response.headers['content-type']
+              });
               resolve(audioBuffer);
             } else {
               const errorText = Buffer.concat(chunks).toString();
-              console.log(`[S2S] Error response body:`, errorText);
+              logger.error("ElevenLabs", "S2S conversion failed", new Error(errorText));
               reject(
                 new Error(`ElevenLabs S2S error: ${response.statusCode} - ${errorText}`)
               );
@@ -217,7 +215,10 @@ export class ElevenLabsService {
       throw new Error("ElevenLabs API key not configured");
     }
 
-    console.log(`[TTS] Calling ElevenLabs API for voice ${voiceId}, text length: ${text.length}`);
+    logger.info("ElevenLabs", "Starting TTS conversion", { 
+      voiceId: voiceId.substring(0, 8),
+      textLength: text.length
+    });
     
     try {
       const response = await fetch(
@@ -240,19 +241,17 @@ export class ElevenLabsService {
         },
       );
 
-      console.log(`[TTS] Response status: ${response.status} ${response.statusText}`);
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[TTS] Error response body: ${errorText}`);
+        logger.error("ElevenLabs", "TTS conversion failed", new Error(errorText));
         throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
       }
 
       const arrayBuffer = await response.arrayBuffer();
-      console.log(`[TTS] Received audio buffer: ${arrayBuffer.byteLength} bytes`);
+      logger.info("ElevenLabs", "TTS conversion complete", { bytes: arrayBuffer.byteLength });
       return Buffer.from(arrayBuffer);
     } catch (error) {
-      console.error(`[TTS] Exception during text-to-speech:`, error);
+      logger.error("ElevenLabs", "TTS exception", error as Error);
       throw error;
     }
   }
@@ -297,7 +296,7 @@ export class ElevenLabsService {
       throw new Error("ElevenLabs API key not configured");
     }
 
-    console.log(`[Audio Isolation] Isolating vocals from: ${audioFilePath}`);
+    logger.info("ElevenLabs", "Starting audio isolation");
 
     return new Promise((resolve, reject) => {
       const formData = new FormData();
@@ -327,15 +326,13 @@ export class ElevenLabsService {
           });
 
           response.on("end", () => {
-            console.log(`[Audio Isolation] Response status: ${response.statusCode}`);
-            
             if (response.statusCode && response.statusCode >= 200 && response.statusCode < 300) {
               const audioBuffer = Buffer.concat(chunks);
-              console.log(`[Audio Isolation] Isolated audio: ${audioBuffer.length} bytes`);
+              logger.info("ElevenLabs", "Audio isolation complete", { bytes: audioBuffer.length });
               resolve(audioBuffer);
             } else {
               const errorText = Buffer.concat(chunks).toString();
-              console.log(`[Audio Isolation] Error response:`, errorText);
+              logger.error("ElevenLabs", "Audio isolation failed", new Error(errorText));
               reject(
                 new Error(`ElevenLabs Audio Isolation error: ${response.statusCode} - ${errorText}`)
               );

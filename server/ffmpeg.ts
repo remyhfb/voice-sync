@@ -146,7 +146,7 @@ export class FFmpegService {
         // Calculate tempo adjustment factor
         const tempo = currentDuration / targetDuration;
         
-        console.log(`[FFmpeg] Time-stretching: ${currentDuration}s → ${targetDuration}s (tempo: ${tempo})`);
+        logger.debug("FFmpeg", "Time-stretching audio", { currentDuration, targetDuration, tempo: tempo.toFixed(3) });
 
         // Use atempo filter to adjust speed while preserving pitch
         // atempo only supports 0.5 to 2.0, so chain multiple if needed
@@ -197,7 +197,7 @@ export class FFmpegService {
         ])
         .output(outputPath)
         .on("end", () => {
-          console.log(`[FFmpeg] Generated ${duration}s of silence: ${outputPath}`);
+          logger.debug("FFmpeg", "Generated silence", { duration });
           resolve();
         })
         .on("error", (err: any) => reject(new Error(`FFmpeg silence generation error: ${err.message}`)))
@@ -356,12 +356,16 @@ export class FFmpegService {
             const endTrimmed = originalDuration - speechEnd;
             const trimmedDuration = speechEnd - speechStart;
 
-            console.log(`[FFmpeg] Silence trim: ${startTrimmed.toFixed(2)}s from start, ${endTrimmed.toFixed(2)}s from end`);
-            console.log(`[FFmpeg] Duration: ${originalDuration.toFixed(2)}s → ${trimmedDuration.toFixed(2)}s`);
+            logger.debug("FFmpeg", "Silence trimmed", { 
+              startTrimmed: startTrimmed.toFixed(2), 
+              endTrimmed: endTrimmed.toFixed(2),
+              originalDuration: originalDuration.toFixed(2),
+              trimmedDuration: trimmedDuration.toFixed(2)
+            });
 
             // Guard against zero/negative duration (file is entirely/mostly silence)
             if (trimmedDuration <= 0.1) {
-              console.log(`[FFmpeg] Warning: Trimmed duration too short (${trimmedDuration}s), returning original file`);
+              logger.warn("FFmpeg", "Trimmed duration too short, returning original", { trimmedDuration });
               resolve({
                 startTrimmed: 0,
                 endTrimmed: 0,
@@ -426,7 +430,7 @@ export class FFmpegService {
         ])
         .output(outputPath)
         .on("end", () => {
-          console.log(`[FFmpeg] Extracted segment: ${startTime}s-${endTime}s → ${outputPath}`);
+          logger.debug("FFmpeg", "Extracted audio segment", { startTime, endTime });
           resolve();
         })
         .on("error", (err: any) => reject(new Error(`FFmpeg segment extraction error: ${err.message}`)))
@@ -446,7 +450,7 @@ export class FFmpegService {
     ratio: number
   ): Promise<void> {
     return new Promise((resolve, reject) => {
-      console.log(`[FFmpeg] Time-stretching video by ${ratio}x`);
+      logger.info("FFmpeg", "Time-stretching video", { ratio: ratio.toFixed(3) });
       
       ffmpeg(inputPath)
         .videoFilter(`setpts=${ratio}*PTS`)
@@ -458,7 +462,7 @@ export class FFmpegService {
         ])
         .output(outputPath)
         .on("end", () => {
-          console.log(`[FFmpeg] Video time-stretched: ${ratio}x → ${outputPath}`);
+          logger.debug("FFmpeg", "Video time-stretch complete");
           resolve();
         })
         .on("error", (err: any) => reject(new Error(`FFmpeg time-stretch error: ${err.message}`)))
@@ -490,7 +494,7 @@ export class FFmpegService {
         .output(outputPath)
         .on("end", async () => {
           await fs.unlink(concatListPath).catch(() => {});
-          console.log(`[FFmpeg] Concatenated ${segmentPaths.length} video segments → ${outputPath}`);
+          logger.info("FFmpeg", "Video segments concatenated", { segments: segmentPaths.length });
           resolve();
         })
         .on("error", async (err: any) => {

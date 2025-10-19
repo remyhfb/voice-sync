@@ -1,5 +1,6 @@
 import Replicate from "replicate";
 import fs from "fs/promises";
+import { logger } from "./logger";
 
 export class ReplicateService {
   private client: Replicate;
@@ -28,7 +29,7 @@ export class ReplicateService {
       }>;
     }>;
   }> {
-    console.log(`[Replicate] Transcribing audio with timestamps: ${audioPath}`);
+    logger.info("Replicate", "Starting Whisper transcription");
     
     // Read audio file as base64
     const audioBuffer = await fs.readFile(audioPath);
@@ -55,16 +56,16 @@ export class ReplicateService {
       }
     ) as any;
 
-    console.log(`[Replicate] Whisper output:`, JSON.stringify(output).substring(0, 500));
-
     // Parse the output to extract segments with timestamps
     const result = {
       text: output.text || output.transcription || "",
       segments: output.segments || []
     };
 
-    console.log(`[Replicate] Transcription: ${result.text.substring(0, 200)}...`);
-    console.log(`[Replicate] Found ${result.segments.length} segments with timestamps`);
+    logger.info("Replicate", "Whisper transcription complete", { 
+      textLength: result.text.length,
+      segments: result.segments.length 
+    });
     
     return result;
   }
@@ -73,8 +74,7 @@ export class ReplicateService {
    * Generate natural-sounding speech using Bark
    */
   async generateSpeech(text: string): Promise<Buffer> {
-    console.log(`[Replicate] Generating speech with Bark`);
-    console.log(`[Replicate] Text: ${text.substring(0, 200)}...`);
+    logger.info("Replicate", "Starting Bark speech generation", { textLength: text.length });
 
     const output = await this.client.run(
       "suno-ai/bark:b76242b40d67c76ab6742e987628a2a9ac019e11d56ab96c4e91ce03b79b2787",
@@ -88,9 +88,6 @@ export class ReplicateService {
       }
     ) as any;
 
-    console.log(`[Replicate] Bark output type: ${typeof output}`);
-    console.log(`[Replicate] Bark output:`, output);
-
     // Bark returns a URL to the generated audio file
     let audioUrl: string;
     if (typeof output === 'string') {
@@ -101,7 +98,7 @@ export class ReplicateService {
       throw new Error(`Unexpected Bark output format: ${JSON.stringify(output)}`);
     }
 
-    console.log(`[Replicate] Downloading Bark audio from: ${audioUrl}`);
+    logger.debug("Replicate", "Downloading Bark audio");
 
     // Download the audio file
     const response = await fetch(audioUrl);
@@ -112,7 +109,7 @@ export class ReplicateService {
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     
-    console.log(`[Replicate] Bark audio downloaded: ${buffer.length} bytes`);
+    logger.info("Replicate", "Bark speech generation complete", { bytes: buffer.length });
     return buffer;
   }
 }
