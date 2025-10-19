@@ -27,9 +27,15 @@ The system offers three primary processing pipelines:
 3.  **Lip-Sync (Your Voice)**: A hybrid approach using the user's authentic voice acting combined with AI lip-sync technology. This pipeline includes audio cleanup (ElevenLabs), transcription (Whisper), segment alignment, video time-stretching (FFmpeg), and final lip-sync (Sync Labs).
 
 ### Pacing Report System
-The application includes a comprehensive pacing analysis system that provides users with detailed feedback on their voice performance timing:
+The application includes an optional pacing analysis system that provides users with detailed feedback on their voice performance timing. This feature is **separate from the main processing pipeline** and requires users to manually upload files for analysis.
 
-**Speech-Only Duration Measurement**: The system uses word-level timestamps from Whisper transcription to calculate pure speech duration, excluding all leading/trailing pauses and silences. This ensures accurate pacing measurements that reflect actual speaking speed rather than total segment duration.
+**Speech-Only Duration Measurement**: The system uses Silero VAD (Voice Activity Detection) to calculate pure speech duration, excluding all silence and pauses. This ensures accurate pacing measurements that reflect actual speaking speed rather than total segment duration.
+
+**Technical Implementation**:
+- **Python Service** (`server/vad-service.py`): Uses Silero VAD model from Torch Hub with soundfile for audio I/O
+- **Backend Endpoint** (`/api/jobs/:id/analyze-pacing`): Accepts file uploads, extracts audio from VEO video using FFmpeg, runs VAD analysis, and stores results in job metadata
+- **Frontend Component** (`VadPacingAnalysis`): Provides upload interface for VEO video and user audio files, displays detailed results with visual feedback
+- **Audio Processing**: Handles mono/stereo conversion, resamples to 16kHz, uses 0.5 confidence threshold for speech detection
 
 **7-Tier Classification System**:
 - **Perfect** (97-103% of VEO speed): Timing matches the video perfectly
@@ -41,11 +47,11 @@ The application includes a comprehensive pacing analysis system that provides us
 - **Critically Slow** (>125%): Major pacing issue requiring significant adjustment
 
 **Report Components**:
-- **Summary Statistics**: Overall pacing ratio, total segments analyzed, segments needing adjustment, and average deviation
-- **Per-Segment Feedback**: Individual segment analysis with VEO text, user text, speech durations, pacing ratio, classification badge, and actionable guidance
-- **Visual Indicators**: Color-coded badges and icons (green for perfect, yellow/orange for moderate issues, red for critical issues) with hover interactions
+- **Summary Statistics**: Overall pacing ratio, VEO speech duration, user speech duration, and classification badge
+- **Actionable Guidance**: Specific recommendations based on pacing classification (e.g., "Try speaking slightly faster" or "Perfect match!")
+- **Visual Indicators**: Color-coded badges and icons (green for perfect, yellow/orange for moderate issues, red for critical issues)
 
-The pacing report is automatically generated during the lip-sync processing pipeline and stored in job metadata, displayed on both the creation page (after processing) and projects page (for historical jobs).
+**Workflow**: After a lip-sync job completes, users can optionally run pacing analysis by uploading the VEO video file and their user audio file. The analysis result is stored in job metadata and displayed on the creation page. This decoupled approach ensures the main processing pipeline remains fast and reliable while still providing pacing insights when needed.
 
 ## External Dependencies
 
