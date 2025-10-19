@@ -36,16 +36,15 @@ export class ReplicateService {
     const audioDataUri = `data:audio/mpeg;base64,${audioBase64}`;
 
     const output = await this.client.run(
-      "openai/whisper:4d50797290df275329f202e48c76360b3f22b08d28c196cbc54600319435f8d2",
+      "hnesk/whisper-wordtimestamps:1c9e1513c1351c1296f8e5c2c06d81cc96c70bd9d6bda63b2f3a6bb21ecf8ab4",
       {
         input: {
           audio: audioDataUri,
-          model: "large-v3",
+          model: "large",
           language: "en",
           translate: false,
           temperature: 0,
-          transcription: "verbose_json", // Get word-level timestamps
-          word_timestamps: true, // Enable word-level timing
+          word_timestamps: true,
           suppress_tokens: "-1",
           logprob_threshold: -1.0,
           no_speech_threshold: 0.6,
