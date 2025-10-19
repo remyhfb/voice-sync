@@ -279,4 +279,149 @@ export class SegmentAligner {
     return ratio;
   }
 
+  /**
+   * Classify pacing based on speech-only duration ratio
+   * Ratio = user speech duration / VEO speech duration
+   */
+  private classifyPacing(ratio: number): {
+    label: "perfect" | "slightly_fast" | "fast" | "critically_fast" | "slightly_slow" | "slow" | "critically_slow";
+    guidance: string;
+  } {
+    if (ratio >= 0.97 && ratio <= 1.03) {
+      return {
+        label: "perfect",
+        guidance: "Perfect pacing! Your timing matches the video perfectly."
+      };
+    } else if (ratio >= 0.90 && ratio < 0.97) {
+      const pct = Math.round((1 - ratio) * 100);
+      return {
+        label: "slightly_fast",
+        guidance: `${pct}% faster than video. Try slowing down slightly for this segment.`
+      };
+    } else if (ratio >= 0.75 && ratio < 0.90) {
+      const pct = Math.round((1 - ratio) * 100);
+      return {
+        label: "fast",
+        guidance: `${pct}% faster than video. Slow down noticeably for this segment.`
+      };
+    } else if (ratio < 0.75) {
+      const pct = Math.round((1 - ratio) * 100);
+      return {
+        label: "critically_fast",
+        guidance: `${pct}% faster than video. CRITICAL: Take your time with this segment, speak much slower.`
+      };
+    } else if (ratio > 1.03 && ratio <= 1.10) {
+      const pct = Math.round((ratio - 1) * 100);
+      return {
+        label: "slightly_slow",
+        guidance: `${pct}% slower than video. Try speeding up slightly for this segment.`
+      };
+    } else if (ratio > 1.10 && ratio <= 1.25) {
+      const pct = Math.round((ratio - 1) * 100);
+      return {
+        label: "slow",
+        guidance: `${pct}% slower than video. Speed up noticeably for this segment.`
+      };
+    } else {
+      const pct = Math.round((ratio - 1) * 100);
+      return {
+        label: "critically_slow",
+        guidance: `${pct}% slower than video. CRITICAL: Pick up the pace significantly for this segment.`
+      };
+    }
+  }
+
+  /**
+   * Generate pacing report based on speech-only duration comparisons
+   * CRITICAL: Only measures actual speech, excludes all pauses/silences
+   */
+  generatePacingReport(alignments: AlignmentResult[]): {
+    summary: {
+      overallRatio: number;
+      totalSegments: number;
+      segmentsNeedingAdjustment: number;
+      averageDeviation: number;
+      overallPacing: "perfect" | "slightly_fast" | "fast" | "critically_fast" | "slightly_slow" | "slow" | "critically_slow";
+    };
+    segments: Array<{
+      segmentIndex: number;
+      veoText: string;
+      userText: string;
+      veoSpeechDuration: number;
+      userSpeechDuration: number;
+      pacingRatio: number;
+      pacingLabel: "perfect" | "slightly_fast" | "fast" | "critically_fast" | "slightly_slow" | "slow" | "critically_slow";
+      guidance: string;
+      wordCount: number;
+    }>;
+  } {
+    // Filter to speech-only segments
+    const speechAlignments = alignments.filter(a => a.veoSegment.type === "speech");
+
+    if (speechAlignments.length === 0) {
+      return {
+        summary: {
+          overallRatio: 1.0,
+          totalSegments: 0,
+          segmentsNeedingAdjustment: 0,
+          averageDeviation: 0,
+          overallPacing: "perfect"
+        },
+        segments: []
+      };
+    }
+
+    // Calculate speech-only durations and pacing for each segment
+    const segments = speechAlignments.map((alignment, index) => {
+      const veoSpeechDuration = this.calculateSpeechOnlyDuration(alignment.veoSegment);
+      const userSpeechDuration = this.calculateSpeechOnlyDuration(alignment.userSegment);
+
+      // Calculate pacing ratio (avoid division by zero)
+      const pacingRatio = veoSpeechDuration > 0 
+        ? userSpeechDuration / veoSpeechDuration 
+        : 1.0;
+
+      const pacing = this.classifyPacing(pacingRatio);
+
+      // Count words in user segment
+      const wordCount = alignment.userSegment.words?.length || 0;
+
+      return {
+        segmentIndex: index,
+        veoText: alignment.veoSegment.text,
+        userText: alignment.userSegment.text,
+        veoSpeechDuration,
+        userSpeechDuration,
+        pacingRatio,
+        pacingLabel: pacing.label,
+        guidance: pacing.guidance,
+        wordCount
+      };
+    });
+
+    // Calculate summary statistics
+    const totalRatio = segments.reduce((sum, s) => sum + s.pacingRatio, 0);
+    const overallRatio = totalRatio / segments.length;
+    
+    const segmentsNeedingAdjustment = segments.filter(s => s.pacingLabel !== "perfect").length;
+    
+    const deviations = segments.map(s => Math.abs(s.pacingRatio - 1.0));
+    const averageDeviation = deviations.reduce((sum, d) => sum + d, 0) / deviations.length;
+
+    const overallPacing = this.classifyPacing(overallRatio);
+
+    console.log(`[Aligner] Pacing Report: ${segments.length} segments, overall ratio: ${overallRatio.toFixed(2)}, ${segmentsNeedingAdjustment} need adjustment`);
+
+    return {
+      summary: {
+        overallRatio,
+        totalSegments: segments.length,
+        segmentsNeedingAdjustment,
+        averageDeviation,
+        overallPacing: overallPacing.label
+      },
+      segments
+    };
+  }
+
 }
