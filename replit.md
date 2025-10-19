@@ -26,6 +26,27 @@ The system offers three primary processing pipelines:
 2.  **Time-Aligned TTS**: Generates speech from text with word-level timing precision but neutral delivery.
 3.  **Lip-Sync (Your Voice)**: A hybrid approach using the user's authentic voice acting combined with AI lip-sync technology. This pipeline includes audio cleanup (ElevenLabs), transcription (Whisper), segment alignment, video time-stretching (FFmpeg), and final lip-sync (Sync Labs).
 
+### Pacing Report System
+The application includes a comprehensive pacing analysis system that provides users with detailed feedback on their voice performance timing:
+
+**Speech-Only Duration Measurement**: The system uses word-level timestamps from Whisper transcription to calculate pure speech duration, excluding all leading/trailing pauses and silences. This ensures accurate pacing measurements that reflect actual speaking speed rather than total segment duration.
+
+**7-Tier Classification System**:
+- **Perfect** (97-103% of VEO speed): Timing matches the video perfectly
+- **Slightly Fast** (90-97%): Minor speed adjustment needed
+- **Fast** (75-90%): Noticeable speed difference
+- **Critically Fast** (<75%): Major pacing issue requiring significant adjustment
+- **Slightly Slow** (103-110%): Minor slowdown detected
+- **Slow** (110-125%): Noticeable slowdown
+- **Critically Slow** (>125%): Major pacing issue requiring significant adjustment
+
+**Report Components**:
+- **Summary Statistics**: Overall pacing ratio, total segments analyzed, segments needing adjustment, and average deviation
+- **Per-Segment Feedback**: Individual segment analysis with VEO text, user text, speech durations, pacing ratio, classification badge, and actionable guidance
+- **Visual Indicators**: Color-coded badges and icons (green for perfect, yellow/orange for moderate issues, red for critical issues) with hover interactions
+
+The pacing report is automatically generated during the lip-sync processing pipeline and stored in job metadata, displayed on both the creation page (after processing) and projects page (for historical jobs).
+
 ## External Dependencies
 
 *   **ElevenLabs Speech-to-Speech API**: Used for instant voice cloning, speech-to-speech conversion with timing preservation, and background noise removal.

@@ -157,15 +157,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`[JOB ${job.id}] [LIPSYNC] Pacing: ${pacingReport.summary.overallPacing}, ${pacingReport.summary.segmentsNeedingAdjustment}/${pacingReport.summary.totalSegments} segments need adjustment`);
           
           // Get latest job to preserve existing metadata
-          const latestJob = await storage.getProcessingJob(job.id);
-          if (!latestJob) {
+          const jobForPacing = await storage.getProcessingJob(job.id);
+          if (!jobForPacing) {
             throw new Error("Job not found during pacing report update");
           }
           
           await storage.updateProcessingJob(job.id, { 
             progress: 45,
             metadata: {
-              ...latestJob.metadata,
+              ...jobForPacing.metadata,
               pacingReport
             }
           });

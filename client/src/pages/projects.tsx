@@ -8,6 +8,7 @@ import type { ProcessingJob } from "@shared/schema";
 import { useState } from "react";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { useToast } from "@/hooks/use-toast";
+import { PacingReport } from "@/components/PacingReport";
 
 export default function ProjectsPage() {
   const { data: projects = [], isLoading } = useQuery<ProcessingJob[]>({
@@ -203,6 +204,10 @@ export default function ProjectsPage() {
                       </AspectRatio>
                     </CardContent>
                   </Card>
+                  
+                  {project.metadata?.pacingReport && (
+                    <PacingReport report={project.metadata.pacingReport} />
+                  )}
                 </>
               )}
             </div>
