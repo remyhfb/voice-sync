@@ -598,7 +598,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Download original video from object storage
           logger.info(`Job:${jobId}`, "Downloading original video from object storage");
-          const originalVideoUrl = `${process.env.REPLIT_DOMAINS?.split(',')[0] || 'http://localhost:5000'}${job.metadata!.originalVideoPath!}`;
+          const domain = process.env.REPLIT_DOMAINS?.split(',')[0];
+          const originalVideoUrl = domain 
+            ? `https://${domain}${job.metadata!.originalVideoPath!}`
+            : `http://localhost:5000${job.metadata!.originalVideoPath!}`;
           const videoResponse = await fetch(originalVideoUrl);
           if (!videoResponse.ok) {
             throw new Error(`Failed to download original video: ${videoResponse.statusText}`);
