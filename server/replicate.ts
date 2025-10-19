@@ -13,7 +13,8 @@ export class ReplicateService {
   }
 
   /**
-   * Transcribe audio using Whisper with word-level timestamps
+   * Transcribe audio using WhisperX with word-level timestamps
+   * WhisperX provides precise word-level timing using forced alignment
    */
   async transcribeWithTimestamps(audioPath: string): Promise<{
     text: string;
@@ -28,7 +29,7 @@ export class ReplicateService {
       }>;
     }>;
   }> {
-    console.log(`[Replicate] Transcribing audio with timestamps: ${audioPath}`);
+    console.log(`[Replicate] Transcribing audio with WhisperX for word-level timestamps: ${audioPath}`);
     
     // Read audio file as base64
     const audioBuffer = await fs.readFile(audioPath);
@@ -36,35 +37,30 @@ export class ReplicateService {
     const audioDataUri = `data:audio/mpeg;base64,${audioBase64}`;
 
     const output = await this.client.run(
-      "openai/whisper:4d50797290df275329f202e48c76360b3f22b08d28c196cbc54600319435f8d2",
+      "victor-upmeet/whisperx:6bdb0c64814ec43cdbca836cac077647a0d5e9b2f84caf3c02c4e1aa4b1b7b98",
       {
         input: {
           audio: audioDataUri,
-          model: "large-v3",
           language: "en",
-          translate: false,
-          temperature: 0,
-          transcription: "srt", // Get timestamps in SRT format
-          suppress_tokens: "-1",
-          logprob_threshold: -1.0,
-          no_speech_threshold: 0.6,
-          condition_on_previous_text: true,
-          compression_ratio_threshold: 2.4,
-          temperature_increment_on_fallback: 0.2,
+          batch_size: 24
         }
       }
     ) as any;
 
-    console.log(`[Replicate] Whisper output:`, JSON.stringify(output).substring(0, 500));
+    console.log(`[Replicate] WhisperX output:`, JSON.stringify(output).substring(0, 500));
 
-    // Parse the output to extract segments with timestamps
+    // WhisperX returns segments with word-level timestamps
     const result = {
-      text: output.text || output.transcription || "",
+      text: output.text || "",
       segments: output.segments || []
     };
 
     console.log(`[Replicate] Transcription: ${result.text.substring(0, 200)}...`);
-    console.log(`[Replicate] Found ${result.segments.length} segments with timestamps`);
+    console.log(`[Replicate] Found ${result.segments.length} segments with word-level timestamps`);
+    
+    // Log word count for verification
+    const totalWords = result.segments.reduce((sum: number, seg: any) => sum + (seg.words?.length || 0), 0);
+    console.log(`[Replicate] Total words with timestamps: ${totalWords}`);
     
     return result;
   }

@@ -260,9 +260,9 @@ export class SegmentAligner {
     const set2 = new Set(words2);
     let overlap = 0;
 
-    for (const word of set1) {
+    Array.from(set1).forEach(word => {
       if (set2.has(word)) overlap++;
-    }
+    });
 
     // Jaccard similarity: intersection / union
     const union = set1.size + set2.size - overlap;
