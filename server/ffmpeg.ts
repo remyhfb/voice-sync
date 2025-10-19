@@ -91,6 +91,7 @@ export class FFmpegService {
   /**
    * Re-encode video for maximum browser compatibility
    * Uses H.264/AAC codecs which are universally supported
+   * Boosts audio by 30% to compensate for volume loss in earlier pipeline stages
    */
   async reencodeForBrowser(
     inputPath: string,
@@ -101,9 +102,11 @@ export class FFmpegService {
       ffmpeg(inputPath)
         .videoCodec('libx264')
         .audioCodec('aac')
+        .audioFilters('volume=1.3')  // Boost audio by 30% to restore lost volume
         .outputOptions([
           '-preset', 'fast',           // Fast encoding
           '-crf', '23',                // Good quality (lower = better, 23 is default)
+          '-b:a', '192k',              // Audio bitrate for quality
           '-pix_fmt', 'yuv420p',       // Pixel format for maximum compatibility
           '-movflags', '+faststart',   // Enable streaming (metadata at start)
           '-profile:v', 'main',        // H.264 main profile for compatibility
@@ -111,7 +114,7 @@ export class FFmpegService {
         ])
         .output(outputPath)
         .on('end', () => {
-          logger.info("FFmpeg", "Re-encoded for browser compatibility");
+          logger.info("FFmpeg", "Re-encoded for browser compatibility (30% volume boost applied)");
           resolve();
         })
         .on('error', (err: any) => {
