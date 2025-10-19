@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import { promises as fs } from "fs";
+import { createWriteStream } from "fs";
 import { storage } from "./storage";
 import { ElevenLabsService } from "./elevenlabs";
 import { FFmpegService } from "./ffmpeg";
@@ -549,6 +550,122 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Preview Ambient Sound - Generate ONLY the audio for listening before committing
+  app.post("/api/jobs/:jobId/preview-ambient", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      
+      const { enhanceAmbientSchema } = await import("@shared/schema");
+      
+      const validationResult = enhanceAmbientSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: validationResult.error.errors[0]?.message || "Invalid request" 
+        });
+      }
+      
+      const { preset, customPrompt } = validationResult.data;
+      
+      const job = await storage.getProcessingJob(jobId);
+
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      if (job.status !== "completed") {
+        return res.status(400).json({ error: "Job must be completed before previewing ambient sound" });
+      }
+
+      res.json({ message: "Generating ambient sound preview", jobId });
+
+      (async () => {
+        try {
+          const { ElevenLabsService } = await import("./elevenlabs");
+          const { AMBIENT_TYPES } = await import("./sound-regenerator");
+          
+          logger.info(`Job:${jobId}`, "Generating ambient sound preview", { preset, customPrompt });
+          
+          let latestJob = await storage.getProcessingJob(jobId);
+          
+          await storage.updateProcessingJob(jobId, {
+            metadata: {
+              ...(latestJob?.metadata || {}),
+              ambientEnhancement: {
+                status: "processing",
+                preset,
+                customPrompt
+              }
+            }
+          });
+
+          const prompt = customPrompt || (preset ? AMBIENT_TYPES[preset] : '');
+          
+          if (!prompt) {
+            throw new Error('Either preset or customPrompt must be provided');
+          }
+
+          const elevenLabs = new ElevenLabsService();
+          const audioBuffer = await elevenLabs.generateSoundEffect(prompt, {
+            durationSeconds: 30,
+            promptInfluence: 0.5
+          });
+
+          const objectStorageService = new ObjectStorageService();
+          const uploadUrl = await objectStorageService.getObjectEntityUploadURL();
+          
+          await fetch(uploadUrl, {
+            method: 'PUT',
+            body: audioBuffer,
+            headers: {
+              'Content-Type': 'audio/mpeg',
+              'Content-Length': audioBuffer.length.toString(),
+            },
+          });
+
+          const urlParts = uploadUrl.split('?')[0].split('/');
+          const objectId = urlParts[urlParts.length - 1];
+          const previewAudioPath = `/objects/uploads/${objectId}`;
+
+          latestJob = await storage.getProcessingJob(jobId);
+          
+          await storage.updateProcessingJob(jobId, {
+            metadata: {
+              ...(latestJob?.metadata || {}),
+              ambientEnhancement: {
+                status: "completed" as const,
+                preset,
+                customPrompt,
+                ambientPrompt: prompt,
+                previewAudioPath
+              }
+            }
+          });
+
+          logger.info(`Job:${jobId}`, "Ambient sound preview complete", { preset, customPrompt });
+        } catch (error: any) {
+          logger.error(`Job:${jobId}`, "Ambient sound preview failed", error);
+          
+          const latestJobError = await storage.getProcessingJob(jobId);
+          
+          await storage.updateProcessingJob(jobId, {
+            metadata: {
+              ...(latestJobError?.metadata || {}),
+              ambientEnhancement: {
+                status: "failed" as const,
+                preset,
+                customPrompt,
+                errorMessage: error.message
+              }
+            }
+          });
+        }
+      })();
+    } catch (error: any) {
+      logger.error("Routes", "Error starting ambient preview", error);
+      res.status(500).json({ error: error.message || "Failed to start ambient preview" });
+    }
+  });
+
   // Ambient Sound Enhancement - Simple feature using ElevenLabs
   app.post("/api/jobs/:jobId/enhance-ambient", async (req, res) => {
     try {
@@ -608,16 +725,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           });
 
+          // Download video from object storage to temp file
+          const videoFile = await objectStorageService.getObjectEntityFile(job.mergedVideoPath!);
+          const tempVideoPath = `/tmp/ambient-${jobId}-${Date.now()}.mp4`;
+          
+          await new Promise<void>((resolve, reject) => {
+            const writeStream = createWriteStream(tempVideoPath);
+            videoFile.createReadStream()
+              .on('error', reject)
+              .pipe(writeStream)
+              .on('finish', resolve)
+              .on('error', reject);
+          });
+
+          logger.info(`Job:${jobId}`, "Downloaded video for ambient enhancement", { tempVideoPath });
+
           // Run the enhancement
           const result = await soundRegenerator.enhanceWithAmbient(
-            job.mergedVideoPath!,
+            tempVideoPath,
             preset,
             customPrompt,
             '/tmp/sound-design'
           );
 
+          // Clean up temp video file
+          await fs.unlink(tempVideoPath).catch(() => {});
+
           // Upload enhanced video to object storage
-          const objectStorageService = new ObjectStorageService();
           const uploadUrl = await objectStorageService.getObjectEntityUploadURL();
           const videoBuffer = await fs.readFile(result.enhancedVideoPath);
           
