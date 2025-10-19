@@ -5,7 +5,7 @@ import FormData from 'form-data';
 import fs from 'fs/promises';
 import * as path from 'path';
 
-const PYTHON_SERVICE_URL = process.env.PYTHON_SOUND_DETECTION_URL || 'http://localhost:8000';
+const PYTHON_SERVICE_URL = process.env.PYTHON_SOUND_DETECTION_URL || 'http://localhost:8001';
 
 interface DetectedEvent {
   label: string;
