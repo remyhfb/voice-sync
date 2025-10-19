@@ -54,6 +54,9 @@ export class SoundRegenerator {
     const videoMetadata = await this.ffmpeg.getVideoMetadata(lipsyncedVideoPath);
     const duration = videoMetadata.duration;
 
+    // Ensure output directory exists
+    await fs.mkdir(outputDir, { recursive: true });
+
     // Paths
     const ambientAudioPath = path.join(outputDir, `ambient_${Date.now()}.mp3`);
     const enhancedVideoPath = path.join(outputDir, `enhanced_${Date.now()}.mp4`);

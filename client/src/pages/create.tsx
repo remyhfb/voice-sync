@@ -664,25 +664,48 @@ export default function CreatePage() {
                             <p className="text-xs text-muted-foreground">
                               Listen to the preview above. If you like it, click below to add it to your video.
                             </p>
-                            <Button 
-                              size="lg" 
-                              onClick={handleApplyAmbient}
-                              disabled={enhancingAmbient}
-                              className="w-full"
-                              data-testid="button-apply-ambient"
-                            >
-                              {enhancingAmbient ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                  Mixing with Video...
-                                </>
-                              ) : (
-                                <>
-                                  <Download className="h-4 w-4 mr-2" />
-                                  Apply to Video
-                                </>
-                              )}
-                            </Button>
+                            <div className="flex gap-3">
+                              <Button 
+                                size="lg" 
+                                onClick={handleApplyAmbient}
+                                disabled={enhancingAmbient}
+                                className="flex-1"
+                                data-testid="button-apply-ambient"
+                              >
+                                {enhancingAmbient ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Mixing with Video...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Apply to Video
+                                  </>
+                                )}
+                              </Button>
+                              <Button 
+                                size="lg"
+                                variant="outline"
+                                onClick={() => {
+                                  setSelectedAmbientType("");
+                                  setCustomAmbientPrompt("");
+                                  queryClient.setQueryData(['/api/jobs', currentJob.id], {
+                                    ...currentJob,
+                                    metadata: {
+                                      ...currentJob.metadata,
+                                      ambientEnhancement: undefined
+                                    }
+                                  });
+                                }}
+                                disabled={enhancingAmbient}
+                                className="flex-1"
+                                data-testid="button-try-different"
+                              >
+                                <RotateCcw className="h-4 w-4 mr-2" />
+                                Try Different Sound
+                              </Button>
+                            </div>
                           </div>
                         )}
                       </div>
