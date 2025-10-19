@@ -227,7 +227,7 @@ export class PacingAnalyzer {
     console.log(`[PacingAnalyzer] Downloading ${objectPath} to temporary location`);
     
     const file = await objectStorageService.getObjectEntityFile(objectPath);
-    const tempFilePath = path.join('/tmp', `pacing_${Date.now()}_${path.basename(objectPath)}`);
+    const tempFilePath = path.join('/tmp', `pacing_${Date.now()}_${path.basename(objectPath)}.mp3`);
     
     // Download file to temporary location
     await new Promise<void>((resolve, reject) => {
