@@ -2,12 +2,13 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { FileUploadZone } from "@/components/file-upload-zone";
 import { ProcessingTimeline, ProcessingStep } from "@/components/processing-timeline";
+import { PacingReport } from "@/components/PacingReport";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, Loader2, Download, RotateCcw } from "lucide-react";
+import { Sparkles, Loader2, Download, RotateCcw, BarChart3 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { ProcessingJob } from "@shared/schema";
 
@@ -15,6 +16,7 @@ export default function CreatePage() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [analyzingPacing, setAnalyzingPacing] = useState(false);
   const { toast } = useToast();
 
   const { data: currentJob } = useQuery<ProcessingJob>({
@@ -107,6 +109,41 @@ export default function CreatePage() {
       title: "Video playback error",
       description: "Unable to load the video. The file may be corrupted or missing. Try downloading it instead.",
     });
+  };
+
+  const handleAnalyzePacing = async () => {
+    if (!currentJobId) return;
+    
+    setAnalyzingPacing(true);
+    try {
+      await apiRequest(`/api/jobs/${currentJobId}/analyze-pacing`, {
+        method: "POST"
+      });
+      
+      toast({
+        title: "Analysis started",
+        description: "Analyzing pacing... This may take a minute.",
+      });
+      
+      // Poll for updates
+      const pollInterval = setInterval(async () => {
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs", currentJobId] });
+      }, 3000);
+      
+      // Stop polling after 2 minutes
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        setAnalyzingPacing(false);
+      }, 120000);
+      
+    } catch (error: any) {
+      toast({
+        title: "Analysis failed",
+        description: error.message || "Failed to analyze pacing",
+        variant: "destructive",
+      });
+      setAnalyzingPacing(false);
+    }
   };
 
   const getProcessingSteps = (): ProcessingStep[] => {
@@ -270,19 +307,48 @@ export default function CreatePage() {
                   </CardContent>
                 </Card>
 
+                {currentJob.metadata?.pacingAnalysis && (
+                  <PacingReport report={currentJob.metadata.pacingAnalysis} />
+                )}
+
                 <Card className="p-6">
                   <h2 className="text-xl font-semibold mb-4">Next Steps</h2>
-                  <div className="flex gap-3">
-                    <Button size="lg" asChild className="flex-1">
-                      <a href={currentJob.mergedVideoPath} download data-testid="button-download-result">
-                        <Download className="h-4 w-4 mr-2" />
-                        Download Video
-                      </a>
-                    </Button>
-                    <Button size="lg" variant="outline" onClick={handleReset} className="flex-1" data-testid="button-create-another">
-                      <RotateCcw className="h-4 w-4 mr-2" />
-                      Create Another
-                    </Button>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex gap-3">
+                      <Button size="lg" asChild className="flex-1">
+                        <a href={currentJob.mergedVideoPath} download data-testid="button-download-result">
+                          <Download className="h-4 w-4 mr-2" />
+                          Download Video
+                        </a>
+                      </Button>
+                      <Button size="lg" variant="outline" onClick={handleReset} className="flex-1" data-testid="button-create-another">
+                        <RotateCcw className="h-4 w-4 mr-2" />
+                        Create Another
+                      </Button>
+                    </div>
+                    
+                    {!currentJob.metadata?.pacingAnalysis && (
+                      <Button 
+                        size="lg" 
+                        variant="secondary" 
+                        onClick={handleAnalyzePacing}
+                        disabled={analyzingPacing}
+                        className="w-full"
+                        data-testid="button-analyze-pacing"
+                      >
+                        {analyzingPacing ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Analyzing Pacing...
+                          </>
+                        ) : (
+                          <>
+                            <BarChart3 className="h-4 w-4 mr-2" />
+                            Analyze Pacing
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </Card>
               </div>

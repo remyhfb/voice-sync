@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Video, Clock, CheckCircle2, XCircle, Loader2, Download, Play, AlertCircle } from "lucide-react";
+import { Video, Clock, CheckCircle2, XCircle, Loader2, Download, Play, AlertCircle, BarChart3 } from "lucide-react";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,12 +8,15 @@ import type { ProcessingJob } from "@shared/schema";
 import { useState } from "react";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { useToast } from "@/hooks/use-toast";
+import { PacingReport } from "@/components/PacingReport";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function ProjectsPage() {
   const { data: projects = [], isLoading } = useQuery<ProcessingJob[]>({
     queryKey: ["/api/jobs"],
   });
   const [expandedVideo, setExpandedVideo] = useState<string | null>(null);
+  const [analyzingPacing, setAnalyzingPacing] = useState<string | null>(null);
   const { toast } = useToast();
 
   const handleVideoError = (projectId: string) => {
@@ -29,6 +32,39 @@ export default function ProjectsPage() {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const handleAnalyzePacing = async (jobId: string) => {
+    setAnalyzingPacing(jobId);
+    try {
+      await apiRequest(`/api/jobs/${jobId}/analyze-pacing`, {
+        method: "POST"
+      });
+      
+      toast({
+        title: "Analysis started",
+        description: "Analyzing pacing... This may take a minute.",
+      });
+      
+      // Poll for updates
+      const pollInterval = setInterval(async () => {
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      }, 3000);
+      
+      // Stop polling after 2 minutes
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        setAnalyzingPacing(null);
+      }, 120000);
+      
+    } catch (error: any) {
+      toast({
+        title: "Analysis failed",
+        description: error.message || "Failed to analyze pacing",
+        variant: "destructive",
+      });
+      setAnalyzingPacing(null);
+    }
   };
 
   const getStatusIcon = (status: string) => {
@@ -203,6 +239,34 @@ export default function ProjectsPage() {
                       </AspectRatio>
                     </CardContent>
                   </Card>
+
+                  {project.metadata?.pacingAnalysis && (
+                    <PacingReport report={project.metadata.pacingAnalysis} />
+                  )}
+
+                  {!project.metadata?.pacingAnalysis && (
+                    <Card className="p-4">
+                      <Button 
+                        variant="secondary" 
+                        onClick={() => handleAnalyzePacing(project.id)}
+                        disabled={analyzingPacing === project.id}
+                        className="w-full"
+                        data-testid={`button-analyze-pacing-${project.id}`}
+                      >
+                        {analyzingPacing === project.id ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Analyzing Pacing...
+                          </>
+                        ) : (
+                          <>
+                            <BarChart3 className="h-4 w-4 mr-2" />
+                            Analyze Pacing
+                          </>
+                        )}
+                      </Button>
+                    </Card>
+                  )}
                 </>
               )}
             </div>
