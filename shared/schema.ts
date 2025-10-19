@@ -20,6 +20,7 @@ export const processingJobs = pgTable("processing_jobs", {
     audioFormat?: string;
     convertedAudioDuration?: number;
     syncLabsCredits?: number;
+    originalVideoPath?: string;
     silenceTrimmed?: {
       user: {
         startTrimmed: number;

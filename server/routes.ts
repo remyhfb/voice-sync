@@ -134,6 +134,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const segmentPaths: string[] = [];
         
         try {
+          // Step 0.5: Upload original VEO video to object storage for future sound regeneration
+          logger.info(`Job:${job.id}`, "Uploading original VEO video to object storage");
+          const objectStorageServiceInit = new ObjectStorageService();
+          const originalVideoUploadUrl = await objectStorageServiceInit.getObjectEntityUploadURL();
+          const originalVideoBuffer = await fs.readFile(videoFile.path);
+          const originalVideoStats = await fs.stat(videoFile.path);
+          
+          await fetch(originalVideoUploadUrl, {
+            method: 'PUT',
+            body: originalVideoBuffer,
+            headers: {
+              'Content-Type': 'video/mp4',
+              'Content-Length': originalVideoStats.size.toString(),
+            },
+          });
+
+          const originalUrlParts = originalVideoUploadUrl.split('?')[0].split('/');
+          const originalObjectId = originalUrlParts[originalUrlParts.length - 1];
+          const originalVideoPath = `/objects/uploads/${originalObjectId}`;
+
+          // Store original video path in metadata
+          await storage.updateProcessingJob(job.id, {
+            metadata: {
+              ...job.metadata,
+              originalVideoPath,
+            }
+          });
+
           // Step 1: Extract VEO audio (0-10%)
           logger.info(`Job:${job.id}`, "Extracting VEO audio for transcription");
           await ffmpegService.extractAudio(videoFile.path, veoAudioPath);
@@ -505,7 +533,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Job must be completed before regenerating sound design" });
       }
 
-      if (!job.videoPath || !job.mergedVideoPath) {
+      if (!job.metadata?.originalVideoPath || !job.mergedVideoPath) {
         return res.status(400).json({ 
           error: "Required video files not available. Cannot regenerate sound design." 
         });
@@ -516,6 +544,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Run regeneration asynchronously
       (async () => {
+        const originalVideoTempPath = `/tmp/original_video_${jobId}.mp4`;
         try {
           const { soundRegenerator } = await import("./sound-regenerator");
           
@@ -534,10 +563,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           });
 
-          // Run the complete pipeline  
-          // TypeScript: We already checked these exist above, so use non-null assertions
+          // Download original video from object storage
+          logger.info(`Job:${jobId}`, "Downloading original video from object storage");
+          const originalVideoUrl = `${process.env.REPLIT_DOMAINS?.split(',')[0] || 'http://localhost:5000'}${job.metadata!.originalVideoPath!}`;
+          const videoResponse = await fetch(originalVideoUrl);
+          if (!videoResponse.ok) {
+            throw new Error(`Failed to download original video: ${videoResponse.statusText}`);
+          }
+          const videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
+          await fs.writeFile(originalVideoTempPath, videoBuffer);
+
+          // Run the complete pipeline
           const result = await soundRegenerator.regenerateSoundDesign(
-            job.videoPath!,
+            originalVideoTempPath,
             job.mergedVideoPath!,
             '/tmp/sound-design'
           );
@@ -581,6 +619,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             }
           });
+        } finally {
+          // Cleanup temp file
+          await fs.unlink(originalVideoTempPath).catch(() => {});
         }
       })();
     } catch (error: any) {

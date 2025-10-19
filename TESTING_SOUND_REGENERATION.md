@@ -1,5 +1,9 @@
 # Testing Sound Design Regeneration Locally
 
+## ⚠️ Important: Recent Fix Applied!
+
+The 404 error you experienced has been fixed! The original VEO video is now properly stored in object storage before processing starts, so sound regeneration can access it.
+
 ## Quick Start
 
 ### 1. Start the Main Application (Already Running ✅)
@@ -24,6 +28,10 @@ curl http://localhost:8001/health
 ```
 
 Expected response: `{"status":"healthy"}`
+
+### 3. Start a New Lip-Sync Job
+
+**Important:** If you already have a completed job from before the fix, you'll need to create a **new job** for sound regeneration to work. Jobs created before the fix don't have the original video stored.
 
 ---
 
