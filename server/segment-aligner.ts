@@ -6,6 +6,11 @@ export interface TimeSegment {
   end: number;
   duration: number;
   type: "speech" | "pause";
+  words?: Array<{
+    word: string;
+    start: number;
+    end: number;
+  }>;
 }
 
 export interface AlignmentResult {
@@ -45,13 +50,14 @@ export class SegmentAligner {
     for (let i = 0; i < transcriptData.segments.length; i++) {
       const segment = transcriptData.segments[i];
       
-      // Add speech segment
+      // Add speech segment with word-level timestamps
       segments.push({
         text: segment.text,
         start: segment.start,
         end: segment.end,
         duration: segment.end - segment.start,
-        type: "speech"
+        type: "speech",
+        words: segment.words // Preserve word-level timestamps
       });
 
       // Add pause after this segment if there's a next segment
@@ -222,6 +228,38 @@ export class SegmentAligner {
     // Jaccard similarity: intersection / union
     const union = set1.size + set2.size - overlap;
     return overlap / union;
+  }
+
+  /**
+   * Calculate speech-only duration from word-level timestamps
+   * Excludes leading/trailing pauses by using only actual word timestamps
+   * Returns the duration from first real word to last real word
+   */
+  private calculateSpeechOnlyDuration(segment: TimeSegment): number {
+    // If no words available, fall back to raw duration
+    if (!segment.words || segment.words.length === 0) {
+      console.warn(`[Aligner] No word timestamps for segment: "${segment.text.substring(0, 50)}..."`);
+      return segment.duration;
+    }
+
+    // Filter out silence tokens (empty text, punctuation-only)
+    const realWords = segment.words.filter(w => {
+      const normalized = w.word.trim().replace(/[.,!?;:'"]/g, '');
+      return normalized.length > 0;
+    });
+
+    if (realWords.length === 0) {
+      // No real words found, return 0 duration
+      console.warn(`[Aligner] No real words found in segment: "${segment.text.substring(0, 50)}..."`);
+      return 0;
+    }
+
+    // Calculate duration from first word start to last word end
+    const firstWord = realWords[0];
+    const lastWord = realWords[realWords.length - 1];
+    const speechDuration = lastWord.end - firstWord.start;
+
+    return Math.max(0, speechDuration);
   }
 
   /**
