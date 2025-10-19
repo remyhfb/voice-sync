@@ -7,8 +7,6 @@ import { useToast } from "@/hooks/use-toast";
 
 interface VadPacingAnalysisProps {
   jobId: string;
-  veoVideoFile?: File;
-  userAudioFile?: File;
   existingAnalysis?: {
     veoSpeechDuration: number;
     userSpeechDuration: number;
@@ -73,20 +71,20 @@ const pacingConfig = {
 
 export function VadPacingAnalysis({ 
   jobId, 
-  veoVideoFile, 
-  userAudioFile, 
   existingAnalysis,
   onAnalysisComplete
 }: VadPacingAnalysisProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState(existingAnalysis);
+  const [veoVideoFile, setVeoVideoFile] = useState<File | null>(null);
+  const [userAudioFile, setUserAudioFile] = useState<File | null>(null);
   const { toast } = useToast();
 
   const runAnalysis = async () => {
     if (!veoVideoFile || !userAudioFile) {
       toast({
         title: "Missing files",
-        description: "Both VEO video and user audio are required for pacing analysis",
+        description: "Please upload both VEO video and user audio files",
         variant: "destructive"
       });
       return;
@@ -134,23 +132,44 @@ export function VadPacingAnalysis({
     return (
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold mb-1">Pacing Analysis</h2>
-              <p className="text-sm text-muted-foreground">
-                Analyze speech timing using Voice Activity Detection
-              </p>
-            </div>
-            <Button 
-              onClick={runAnalysis}
-              disabled={isAnalyzing || !veoVideoFile || !userAudioFile}
-              data-testid="button-run-pacing-analysis"
-            >
-              {isAnalyzing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isAnalyzing ? "Analyzing..." : "Run Analysis"}
-            </Button>
+          <div>
+            <h2 className="text-xl font-semibold mb-1">Pacing Analysis (Optional)</h2>
+            <p className="text-sm text-muted-foreground">
+              Analyze your speech timing using Voice Activity Detection
+            </p>
           </div>
         </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">VEO Video</label>
+            <input
+              type="file"
+              accept="video/*"
+              onChange={(e) => setVeoVideoFile(e.target.files?.[0] || null)}
+              className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+              data-testid="input-veo-video"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">User Audio</label>
+            <input
+              type="file"
+              accept="audio/*"
+              onChange={(e) => setUserAudioFile(e.target.files?.[0] || null)}
+              className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+              data-testid="input-user-audio"
+            />
+          </div>
+          <Button 
+            onClick={runAnalysis}
+            disabled={isAnalyzing || !veoVideoFile || !userAudioFile}
+            className="w-full"
+            data-testid="button-run-pacing-analysis"
+          >
+            {isAnalyzing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isAnalyzing ? "Analyzing..." : "Run Pacing Analysis"}
+          </Button>
+        </CardContent>
       </Card>
     );
   }

@@ -5,10 +5,11 @@ Measures speech-only duration from audio files, excluding silence and pauses.
 """
 
 import torch
-import torchaudio
 import sys
 import json
 import warnings
+import soundfile as sf
+import numpy as np
 
 warnings.filterwarnings('ignore')
 
@@ -32,10 +33,27 @@ def get_speech_duration(audio_path: str, threshold: float = 0.5) -> dict:
             trust_repo=True
         )
         
-        (get_speech_timestamps, _, read_audio, *_) = utils
+        (get_speech_timestamps, *_) = utils
         
-        # Read audio file
-        wav = read_audio(audio_path, sampling_rate=16000)
+        # Read audio file using soundfile (simpler than torchaudio)
+        audio_data, sample_rate = sf.read(audio_path, dtype='float32')
+        
+        # Convert to mono if stereo
+        if len(audio_data.shape) > 1:
+            audio_data = np.mean(audio_data, axis=1)
+        
+        # Resample to 16kHz if needed (simple linear interpolation)
+        if sample_rate != 16000:
+            duration = len(audio_data) / sample_rate
+            new_length = int(duration * 16000)
+            audio_data = np.interp(
+                np.linspace(0, len(audio_data), new_length),
+                np.arange(len(audio_data)),
+                audio_data
+            )
+        
+        # Convert to torch tensor
+        wav = torch.from_numpy(audio_data)
         
         # Get speech timestamps (excludes silence/pauses)
         speech_timestamps = get_speech_timestamps(
