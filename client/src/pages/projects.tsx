@@ -187,26 +187,28 @@ export default function ProjectsPage() {
               </Card>
 
               {project.status === "completed" && expandedVideo === project.id && project.mergedVideoPath && (
-                <Card>
-                  <CardContent className="p-0">
-                    <AspectRatio ratio={16/9}>
-                      <video
-                        key={project.mergedVideoPath}
-                        controls
-                        className="w-full h-full rounded-lg"
-                        onError={() => handleVideoError(project.id)}
-                        data-testid={`video-player-${project.id}`}
-                      >
-                        <source src={project.mergedVideoPath} type="video/mp4" />
-                        Your browser does not support the video tag.
-                      </video>
-                    </AspectRatio>
-                  </CardContent>
-                </Card>
-              )}
+                <>
+                  <Card>
+                    <CardContent className="p-0">
+                      <AspectRatio ratio={16/9}>
+                        <video
+                          key={project.mergedVideoPath}
+                          controls
+                          className="w-full h-full rounded-lg"
+                          onError={() => handleVideoError(project.id)}
+                          data-testid={`video-player-${project.id}`}
+                        >
+                          <source src={project.mergedVideoPath} type="video/mp4" />
+                          Your browser does not support the video tag.
+                        </video>
+                      </AspectRatio>
+                    </CardContent>
+                  </Card>
 
-              {project.status === "completed" && project.metadata?.alignmentReport && (
-                <AlignmentReport report={project.metadata.alignmentReport} />
+                  {project.metadata?.alignmentReport && (
+                    <AlignmentReport report={project.metadata.alignmentReport} />
+                  )}
+                </>
               )}
             </div>
           ))}
