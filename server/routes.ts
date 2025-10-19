@@ -397,7 +397,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               classification: vadResult.classification,
               analyzedAt: new Date().toISOString()
             }
-          }
+          } as any
         });
       }
 
