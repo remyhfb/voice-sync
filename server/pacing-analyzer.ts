@@ -136,7 +136,7 @@ export class PacingAnalyzer {
       const percentDifference = (timeDelta / veoPhrase.totalDuration) * 100;
       
       let status: "too_fast" | "too_slow" | "perfect";
-      if (Math.abs(percentDifference) < 10) {
+      if (Math.abs(percentDifference) <= 5) {
         status = "perfect";
       } else if (percentDifference < 0) {
         status = "too_fast";
@@ -188,7 +188,7 @@ export class PacingAnalyzer {
     // Generate recommendations
     const recommendations: string[] = [];
     
-    if (Math.abs(avgPercentDifference) < 10) {
+    if (Math.abs(avgPercentDifference) <= 5) {
       recommendations.push("✅ Overall pacing matches the VEO video very well!");
     } else if (avgPercentDifference > 20) {
       recommendations.push(`⚠️ You're speaking ${Math.round(avgPercentDifference)}% slower on average. Try to speed up your delivery.`);

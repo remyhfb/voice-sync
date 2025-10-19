@@ -207,7 +207,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Generate signed GET URL (1 hour TTL) for Sync Labs to download
           const videoReadUrl = await objectStorageService.getSignedReadURL(videoUploadUrl, 3600);
           
-          // Upload cleaned audio
+          // Upload cleaned audio for Sync Labs
           const audioUploadUrl = await objectStorageService.getObjectEntityUploadURL();
           const audioBuffer = await fs.readFile(cleanedUserAudioPath);
           const audioStats = await fs.stat(cleanedUserAudioPath);
@@ -222,7 +222,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Generate signed GET URL (1 hour TTL) for Sync Labs to download
           const audioReadUrl = await objectStorageService.getSignedReadURL(audioUploadUrl, 3600);
           
-          await storage.updateProcessingJob(job.id, { progress: 75 });
+          // Upload VEO audio permanently for pacing analysis
+          const veoAudioUploadUrl = await objectStorageService.getObjectEntityUploadURL();
+          const veoAudioBuffer = await fs.readFile(trimmedVeoAudioPath);
+          const veoAudioStats = await fs.stat(trimmedVeoAudioPath);
+          await fetch(veoAudioUploadUrl, {
+            method: 'PUT',
+            body: veoAudioBuffer,
+            headers: {
+              'Content-Type': 'audio/mpeg',
+              'Content-Length': veoAudioStats.size.toString(),
+            },
+          });
+          
+          // Save permanent paths for pacing analysis
+          const veoAudioObjectId = veoAudioUploadUrl.split('?')[0].split('/').pop();
+          const userAudioObjectId = audioUploadUrl.split('?')[0].split('/').pop();
+          const extractedAudioPath = `/objects/uploads/${veoAudioObjectId}`;
+          const convertedAudioPath = `/objects/uploads/${userAudioObjectId}`;
+          
+          await storage.updateProcessingJob(job.id, { 
+            progress: 75,
+            extractedAudioPath,
+            convertedAudioPath
+          });
           
           console.log(`[JOB ${job.id}] [LIPSYNC] Applying lip-sync with Sync Labs`);
           const synclabs = new SyncLabsService();
@@ -360,7 +383,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (!job.extractedAudioPath || !job.convertedAudioPath) {
-        return res.status(400).json({ error: "Audio files not available for analysis" });
+        return res.status(400).json({ 
+          error: "Audio files not available for analysis. This job was processed before pacing analysis was available. Please process a new video to use this feature." 
+        });
       }
 
       // Return immediately - analysis runs in background

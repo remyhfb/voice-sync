@@ -198,7 +198,7 @@ export function PacingReport({ report }: PacingReportProps) {
                     </div>
                   </div>
 
-                  {Math.abs(comparison.percentDifference) > 10 && (
+                  {Math.abs(comparison.percentDifference) > 5 && (
                     <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
                       {comparison.status === "too_slow" ? (
                         <span>💡 Try speeding up this phrase by {Math.round(Math.abs(comparison.percentDifference))}%</span>
