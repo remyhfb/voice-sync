@@ -36,7 +36,7 @@ export class ReplicateService {
     const audioDataUri = `data:audio/mpeg;base64,${audioBase64}`;
 
     const output = await this.client.run(
-      "hnesk/whisper-wordtimestamps:4a60104c44dd709fc08a03dfeca6c6906257633dd03fd58663ec896a4eeba30e",
+      "hnesk/whisper-wordtimestamps",
       {
         input: {
           audio: audioDataUri,
