@@ -553,7 +553,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/jobs/:jobId/enhance-ambient", async (req, res) => {
     try {
       const { jobId } = req.params;
-      const { ambientType } = req.body;
+      
+      // Import schema for validation
+      const { enhanceAmbientSchema } = await import("@shared/schema");
+      
+      // Validate request body
+      const validationResult = enhanceAmbientSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: validationResult.error.errors[0]?.message || "Invalid request" 
+        });
+      }
+      
+      const { preset, customPrompt } = validationResult.data;
       
       const job = await storage.getProcessingJob(jobId);
 
@@ -571,13 +583,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Validate ambient type
-      if (!ambientType || !['office', 'cafe', 'nature', 'city', 'studio', 'home'].includes(ambientType)) {
-        return res.status(400).json({ 
-          error: "Invalid ambient type. Choose: office, cafe, nature, city, studio, or home" 
-        });
-      }
-
       // Return immediately - enhancement runs in background
       res.json({ message: "Ambient sound enhancement started", jobId });
 
@@ -586,7 +591,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const { soundRegenerator } = await import("./sound-regenerator");
           
-          logger.info(`Job:${jobId}`, "Starting ambient sound enhancement", { ambientType });
+          logger.info(`Job:${jobId}`, "Starting ambient sound enhancement", { preset, customPrompt });
           
           // Re-fetch latest job to preserve all metadata
           let latestJob = await storage.getProcessingJob(jobId);
@@ -597,7 +602,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               ...(latestJob?.metadata || {}),
               ambientEnhancement: {
                 status: "processing",
-                ambientType
+                preset,
+                customPrompt
               }
             }
           });
@@ -605,7 +611,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Run the enhancement
           const result = await soundRegenerator.enhanceWithAmbient(
             job.mergedVideoPath!,
-            ambientType,
+            preset,
+            customPrompt,
             '/tmp/sound-design'
           );
 
@@ -636,7 +643,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               ...(latestJob?.metadata || {}),
               ambientEnhancement: {
                 status: "completed" as const,
-                ambientType: result.ambientType,
+                preset: result.preset,
+                customPrompt: result.customPrompt,
                 ambientPrompt: result.ambientPrompt,
                 enhancedVideoPath
               }
@@ -644,7 +652,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
 
           logger.info(`Job:${jobId}`, "Ambient sound enhancement complete", {
-            ambientType: result.ambientType
+            preset: result.preset,
+            customPrompt: result.customPrompt
           });
         } catch (error: any) {
           logger.error(`Job:${jobId}`, "Ambient sound enhancement failed", error);
@@ -658,7 +667,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               ...(latestJobError?.metadata || {}),
               ambientEnhancement: {
                 status: "failed" as const,
-                ambientType: req.body.ambientType,
+                preset: preset,
+                customPrompt: customPrompt,
                 errorMessage: error.message
               }
             }

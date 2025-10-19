@@ -5,6 +5,7 @@ import { ProcessingTimeline, ProcessingStep } from "@/components/processing-time
 import { PacingReport } from "@/components/PacingReport";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -21,6 +22,7 @@ export default function CreatePage() {
   const [analyzingPacing, setAnalyzingPacing] = useState(false);
   const [enhancingAmbient, setEnhancingAmbient] = useState(false);
   const [selectedAmbientType, setSelectedAmbientType] = useState<string>("office");
+  const [customAmbientPrompt, setCustomAmbientPrompt] = useState<string>("");
   const [successAlertDismissed, setSuccessAlertDismissed] = useState(false);
   const { toast } = useToast();
 
@@ -154,15 +156,35 @@ export default function CreatePage() {
   const handleEnhanceAmbient = async () => {
     if (!currentJobId) return;
     
+    // Validation: at least one must be provided
+    if (!customAmbientPrompt.trim() && !selectedAmbientType) {
+      toast({
+        title: "Input required",
+        description: "Please select a preset or enter a custom prompt",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setEnhancingAmbient(true);
     try {
-      await apiRequest("POST", `/api/jobs/${currentJobId}/enhance-ambient`, {
-        ambientType: selectedAmbientType
-      });
+      const requestBody: { preset?: string; customPrompt?: string } = {};
+      
+      if (customAmbientPrompt.trim()) {
+        requestBody.customPrompt = customAmbientPrompt.trim();
+      } else {
+        requestBody.preset = selectedAmbientType;
+      }
+      
+      await apiRequest("POST", `/api/jobs/${currentJobId}/enhance-ambient`, requestBody);
+      
+      const description = customAmbientPrompt.trim() 
+        ? `Adding custom ambient sound: "${customAmbientPrompt.trim().substring(0, 50)}${customAmbientPrompt.length > 50 ? '...' : ''}"`
+        : `Adding ${selectedAmbientType} ambience to your video...`;
       
       toast({
         title: "Ambient sound enhancement started",
-        description: `Adding ${selectedAmbientType} ambience to your video...`,
+        description,
       });
 
       // Poll for updates
@@ -395,7 +417,11 @@ export default function CreatePage() {
                   <Card className="p-6">
                     <h2 className="text-xl font-semibold mb-2">Ambient Sound Enhancement</h2>
                     <p className="text-sm text-muted-foreground mb-3">
-                      Enhanced with {currentJob.metadata.ambientEnhancement.ambientType} ambience
+                      {currentJob.metadata.ambientEnhancement.customPrompt ? (
+                        <>Enhanced with custom ambient: "{currentJob.metadata.ambientEnhancement.customPrompt}"</>
+                      ) : (
+                        <>Enhanced with {currentJob.metadata.ambientEnhancement.preset || (currentJob.metadata.ambientEnhancement as any).ambientType || 'ambient'} ambience</>
+                      )}
                     </p>
                     <Button size="lg" asChild className="w-full">
                       <a href={currentJob.metadata.ambientEnhancement.enhancedVideoPath} download data-testid="button-download-enhanced">
@@ -450,9 +476,13 @@ export default function CreatePage() {
                       <div className="space-y-3">
                         <div className="flex flex-col gap-2">
                           <label className="text-sm font-medium">Add Ambient Sound (Optional)</label>
-                          <Select value={selectedAmbientType} onValueChange={setSelectedAmbientType}>
+                          <Select 
+                            value={selectedAmbientType} 
+                            onValueChange={setSelectedAmbientType}
+                            disabled={!!customAmbientPrompt.trim()}
+                          >
                             <SelectTrigger data-testid="select-ambient-type">
-                              <SelectValue />
+                              <SelectValue placeholder="Select preset..." />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="office" data-testid="option-office">Office</SelectItem>
@@ -463,6 +493,24 @@ export default function CreatePage() {
                               <SelectItem value="home" data-testid="option-home">Home</SelectItem>
                             </SelectContent>
                           </Select>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="text-sm font-medium">Or enter custom prompt</label>
+                          <Input
+                            type="text"
+                            placeholder="Describe the ambient sound you want (e.g., 'Gentle rain with distant thunder')"
+                            value={customAmbientPrompt}
+                            onChange={(e) => setCustomAmbientPrompt(e.target.value)}
+                            disabled={enhancingAmbient}
+                            maxLength={200}
+                            data-testid="input-custom-prompt"
+                            className="font-mono text-sm"
+                          />
+                          {customAmbientPrompt.length > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              {customAmbientPrompt.length}/200 characters
+                            </p>
+                          )}
                         </div>
                         <Button 
                           size="lg" 

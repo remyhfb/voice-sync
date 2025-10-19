@@ -27,9 +27,9 @@ The system offers three primary processing pipelines:
 3.  **Lip-Sync (Your Voice)**: A hybrid approach using the user's authentic voice acting combined with AI lip-sync technology. This pipeline includes audio cleanup (ElevenLabs), transcription (Whisper), segment alignment, video time-stretching (FFmpeg), and final lip-sync (Sync Labs).
 
 #### Ambient Sound Enhancement (Optional)
-A simplified optional feature that adds professional ambient atmosphere to the finished lip-synced video. Uses ElevenLabs Sound Effects API to generate high-quality ambient sounds based on user selection.
+A simplified optional feature that adds professional ambient atmosphere to the finished lip-synced video. Uses ElevenLabs Sound Effects API to generate high-quality ambient sounds based on preset selection or custom user prompts.
 
-**Available Ambient Types:**
+**Available Preset Ambient Types:**
 - **Office**: Gentle office ambience with soft typing and paper shuffling
 - **Café**: Busy coffee shop atmosphere with distant chatter and espresso machine sounds
 - **Nature**: Peaceful outdoor ambience with birds chirping and wind rustling leaves
@@ -37,21 +37,32 @@ A simplified optional feature that adds professional ambient atmosphere to the f
 - **Studio**: Professional recording studio ambience with subtle room tone
 - **Home**: Quiet home ambience with soft ambient room tone
 
+**Custom Prompts:**
+- Users can enter custom ambient sound descriptions (5-200 characters)
+- Examples: "Gentle rain with distant thunder", "Busy restaurant with soft jazz music", "Quiet library with page turning"
+- Custom prompts override preset selections when provided
+
 **Technical Implementation:**
 - **ElevenLabs Sound Effects API**: Generates 30-second ambient loops using v2 model with 0.5 prompt influence
 - **FFmpeg Audio Mixing**: Loops ambient audio and mixes at 15% volume with original lip-synced video (preserving 100% original audio)
 - **No External Services**: All processing happens in single Replit environment using built-in integrations
 
 **API Endpoint:**
-- `POST /api/jobs/:jobId/enhance-ambient` - Body: `{ ambientType: "office" | "cafe" | "nature" | "city" | "studio" | "home" }`
+- `POST /api/jobs/:jobId/enhance-ambient`
+- Request body: `{ preset?: "office" | "cafe" | "nature" | "city" | "studio" | "home", customPrompt?: string }`
+- Validation: Either preset or customPrompt must be provided (not both)
 - Runs asynchronously in background
-- Stores enhanced video path in job metadata under `ambientEnhancement`
+- Stores enhanced video path and prompt details in job metadata under `ambientEnhancement`
 
 **UI Flow:**
-- Ambient type selector (dropdown) appears after successful lip-sync completion
-- User selects desired ambient type and clicks "Add Ambient Sound"
+- After successful lip-sync completion, user sees:
+  - Preset selector dropdown (6 options)
+  - Custom prompt text input (5-200 characters)
+  - Preset dropdown is disabled when custom prompt is entered
+- User selects preset OR enters custom prompt and clicks "Add Ambient Sound"
 - Polling updates status every 3 seconds until completion
 - Enhanced video becomes available for download alongside original result
+- Completion message shows which preset or custom prompt was used
 
 ## External Dependencies
 

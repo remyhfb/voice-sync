@@ -89,7 +89,8 @@ export const processingJobs = pgTable("processing_jobs", {
     };
     ambientEnhancement?: {
       status: "processing" | "completed" | "failed";
-      ambientType: "office" | "cafe" | "nature" | "city" | "studio" | "home";
+      preset?: "office" | "cafe" | "nature" | "city" | "studio" | "home";
+      customPrompt?: string;
       ambientPrompt?: string;
       enhancedVideoPath?: string;
       errorMessage?: string;
@@ -109,3 +110,23 @@ export const insertProcessingJobSchema = createInsertSchema(processingJobs).omit
 
 export type InsertProcessingJob = z.infer<typeof insertProcessingJobSchema>;
 export type ProcessingJob = typeof processingJobs.$inferSelect;
+
+// Ambient enhancement request schema
+export const AMBIENT_PRESETS = ["office", "cafe", "nature", "city", "studio", "home"] as const;
+export type AmbientPreset = typeof AMBIENT_PRESETS[number];
+
+export const enhanceAmbientSchema = z.object({
+  preset: z.enum(AMBIENT_PRESETS).optional(),
+  customPrompt: z.string()
+    .min(5, "Custom prompt must be at least 5 characters")
+    .max(200, "Custom prompt must be less than 200 characters")
+    .optional(),
+}).refine(
+  (data) => data.preset || data.customPrompt,
+  { message: "Either preset or customPrompt must be provided" }
+).refine(
+  (data) => !(data.preset && data.customPrompt),
+  { message: "Cannot provide both preset and customPrompt - choose one" }
+);
+
+export type EnhanceAmbientRequest = z.infer<typeof enhanceAmbientSchema>;

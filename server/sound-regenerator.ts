@@ -5,7 +5,8 @@ import fs from 'fs/promises';
 import * as path from 'path';
 
 export interface SoundDesignResult {
-  ambientType: string;
+  preset?: AmbientType;
+  customPrompt?: string;
   ambientPrompt: string;
   generatedAudioPath: string;
   enhancedVideoPath: string;
@@ -34,16 +35,18 @@ export class SoundRegenerator {
 
   /**
    * Simple ambient sound enhancement:
-   * 1. Generate ambient sound using ElevenLabs
+   * 1. Generate ambient sound using ElevenLabs (from preset or custom prompt)
    * 2. Mix it with the lip-synced video at low volume
    */
   async enhanceWithAmbient(
     lipsyncedVideoPath: string,
-    ambientType: AmbientType,
-    outputDir: string
+    preset?: AmbientType,
+    customPrompt?: string,
+    outputDir: string = '/tmp/sound-design'
   ): Promise<SoundDesignResult> {
     logger.info('SoundRegenerator', 'Starting ambient sound enhancement', {
-      ambientType,
+      preset,
+      customPrompt,
       videoPath: path.basename(lipsyncedVideoPath)
     });
 
@@ -56,8 +59,13 @@ export class SoundRegenerator {
     const enhancedVideoPath = path.join(outputDir, `enhanced_${Date.now()}.mp4`);
 
     try {
-      // Step 1: Generate ambient sound
-      const prompt = AMBIENT_TYPES[ambientType];
+      // Step 1: Determine the prompt to use
+      const prompt = customPrompt || (preset ? AMBIENT_TYPES[preset] : '');
+      
+      if (!prompt) {
+        throw new Error('Either preset or customPrompt must be provided');
+      }
+      
       logger.info('SoundRegenerator', 'Generating ambient sound', { prompt, duration });
       
       const audioBuffer = await this.elevenLabs.generateSoundEffect(prompt, {
@@ -89,7 +97,8 @@ export class SoundRegenerator {
       });
 
       return {
-        ambientType,
+        preset,
+        customPrompt,
         ambientPrompt: prompt,
         generatedAudioPath: ambientAudioPath,
         enhancedVideoPath
