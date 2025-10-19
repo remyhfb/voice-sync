@@ -153,7 +153,7 @@ export default function CreatePage() {
     }
   };
 
-  const handleEnhanceAmbient = async () => {
+  const handlePreviewAmbient = async () => {
     if (!currentJobId) return;
     
     // Validation: at least one must be provided
@@ -176,15 +176,11 @@ export default function CreatePage() {
         requestBody.preset = selectedAmbientType;
       }
       
-      await apiRequest("POST", `/api/jobs/${currentJobId}/enhance-ambient`, requestBody);
-      
-      const description = customAmbientPrompt.trim() 
-        ? `Adding custom ambient sound: "${customAmbientPrompt.trim().substring(0, 50)}${customAmbientPrompt.length > 50 ? '...' : ''}"`
-        : `Adding ${selectedAmbientType} ambience to your video...`;
+      await apiRequest("POST", `/api/jobs/${currentJobId}/preview-ambient`, requestBody);
       
       toast({
-        title: "Ambient sound enhancement started",
-        description,
+        title: "Generating preview...",
+        description: "Creating ambient sound for you to listen to",
       });
 
       // Poll for updates
@@ -192,9 +188,75 @@ export default function CreatePage() {
         queryClient.invalidateQueries({ queryKey: ["/api/jobs", currentJobId] });
         const job = queryClient.getQueryData<ProcessingJob>(["/api/jobs", currentJobId]);
         
-        // Stop polling when processing completes or fails
+        // Stop polling when preview completes or fails
         if (job?.metadata?.ambientEnhancement && 
             job.metadata.ambientEnhancement.status !== "processing") {
+          clearInterval(pollInterval);
+          setEnhancingAmbient(false);
+          
+          if (job.metadata.ambientEnhancement.status === "completed") {
+            toast({
+              title: "Preview ready!",
+              description: "Listen to the ambient sound below and apply it to your video if you like it",
+            });
+          }
+        }
+      }, 3000);
+
+      // Timeout after 2 minutes as fallback
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        setEnhancingAmbient(false);
+      }, 120000);
+      
+    } catch (error: any) {
+      toast({
+        title: "Preview generation failed",
+        description: error.message || "Failed to generate preview",
+        variant: "destructive",
+      });
+      setEnhancingAmbient(false);
+    }
+  };
+
+  const handleApplyAmbient = async () => {
+    if (!currentJobId) return;
+    
+    const job = queryClient.getQueryData<ProcessingJob>(["/api/jobs", currentJobId]);
+    if (!job?.metadata?.ambientEnhancement) return;
+    
+    setEnhancingAmbient(true);
+    try {
+      const requestBody: { preset?: string; customPrompt?: string } = {};
+      
+      if (job.metadata.ambientEnhancement.customPrompt) {
+        requestBody.customPrompt = job.metadata.ambientEnhancement.customPrompt;
+      } else if (job.metadata.ambientEnhancement.preset) {
+        requestBody.preset = job.metadata.ambientEnhancement.preset;
+      }
+      
+      await apiRequest("POST", `/api/jobs/${currentJobId}/enhance-ambient`, requestBody);
+      
+      toast({
+        title: "Mixing ambient sound...",
+        description: "Adding the ambient sound to your video",
+      });
+
+      // Poll for updates
+      const pollInterval = setInterval(async () => {
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs", currentJobId] });
+        const job = queryClient.getQueryData<ProcessingJob>(["/api/jobs", currentJobId]);
+        
+        // Check if enhancedVideoPath is available (processing complete)
+        if (job?.metadata?.ambientEnhancement?.enhancedVideoPath) {
+          clearInterval(pollInterval);
+          setEnhancingAmbient(false);
+          
+          toast({
+            title: "Ambient sound added!",
+            description: "Your enhanced video is ready to download",
+          });
+        } else if (job?.metadata?.ambientEnhancement?.status === "failed") {
           clearInterval(pollInterval);
           setEnhancingAmbient(false);
         }
@@ -208,8 +270,8 @@ export default function CreatePage() {
       
     } catch (error: any) {
       toast({
-        title: "Ambient enhancement failed",
-        description: error.message || "Failed to add ambient sound",
+        title: "Enhancement failed",
+        description: error.message || "Failed to add ambient sound to video",
         variant: "destructive",
       });
       setEnhancingAmbient(false);
@@ -413,9 +475,9 @@ export default function CreatePage() {
                   <PacingReport report={currentJob.metadata.pacingAnalysis} />
                 )}
 
-                {currentJob.metadata?.ambientEnhancement?.status === "completed" && (
+                {currentJob.metadata?.ambientEnhancement?.enhancedVideoPath && (
                   <Card className="p-6">
-                    <h2 className="text-xl font-semibold mb-2">Ambient Sound Enhancement</h2>
+                    <h2 className="text-xl font-semibold mb-2">Ambient Sound Enhanced Video</h2>
                     <p className="text-sm text-muted-foreground mb-3">
                       {currentJob.metadata.ambientEnhancement.customPrompt ? (
                         <>Enhanced with custom ambient: "{currentJob.metadata.ambientEnhancement.customPrompt}"</>
@@ -471,69 +533,104 @@ export default function CreatePage() {
                       </Button>
                     )}
 
-                    {(!currentJob.metadata?.ambientEnhancement || 
-                      currentJob.metadata.ambientEnhancement.status === "failed") && (
+                    {!currentJob.metadata?.ambientEnhancement?.enhancedVideoPath && (
                       <div className="space-y-3">
-                        <div className="flex flex-col gap-2">
-                          <label className="text-sm font-medium">Add Ambient Sound (Optional)</label>
-                          <Select 
-                            value={selectedAmbientType} 
-                            onValueChange={setSelectedAmbientType}
-                            disabled={!!customAmbientPrompt.trim()}
-                          >
-                            <SelectTrigger data-testid="select-ambient-type">
-                              <SelectValue placeholder="Select preset..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="office" data-testid="option-office">Office</SelectItem>
-                              <SelectItem value="cafe" data-testid="option-cafe">Café</SelectItem>
-                              <SelectItem value="nature" data-testid="option-nature">Nature</SelectItem>
-                              <SelectItem value="city" data-testid="option-city">City Street</SelectItem>
-                              <SelectItem value="studio" data-testid="option-studio">Studio</SelectItem>
-                              <SelectItem value="home" data-testid="option-home">Home</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="text-sm font-medium">Or enter custom prompt</label>
-                          <Input
-                            type="text"
-                            placeholder="Describe the ambient sound you want (e.g., 'Gentle rain with distant thunder')"
-                            value={customAmbientPrompt}
-                            onChange={(e) => setCustomAmbientPrompt(e.target.value)}
-                            disabled={enhancingAmbient}
-                            maxLength={200}
-                            data-testid="input-custom-prompt"
-                            className="font-mono text-sm"
-                          />
-                          {customAmbientPrompt.length > 0 && (
+                        {!currentJob.metadata?.ambientEnhancement?.previewAudioPath ? (
+                          <>
+                            <div className="flex flex-col gap-2">
+                              <label className="text-sm font-medium">Add Ambient Sound (Optional)</label>
+                              <Select 
+                                value={selectedAmbientType} 
+                                onValueChange={setSelectedAmbientType}
+                                disabled={!!customAmbientPrompt.trim() || enhancingAmbient}
+                              >
+                                <SelectTrigger data-testid="select-ambient-type">
+                                  <SelectValue placeholder="Select preset..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="office" data-testid="option-office">Office</SelectItem>
+                                  <SelectItem value="cafe" data-testid="option-cafe">Café</SelectItem>
+                                  <SelectItem value="nature" data-testid="option-nature">Nature</SelectItem>
+                                  <SelectItem value="city" data-testid="option-city">City Street</SelectItem>
+                                  <SelectItem value="studio" data-testid="option-studio">Studio</SelectItem>
+                                  <SelectItem value="home" data-testid="option-home">Home</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              <label className="text-sm font-medium">Or enter custom prompt</label>
+                              <Input
+                                type="text"
+                                placeholder="Describe the ambient sound you want (e.g., 'Gentle rain with distant thunder')"
+                                value={customAmbientPrompt}
+                                onChange={(e) => setCustomAmbientPrompt(e.target.value)}
+                                disabled={enhancingAmbient}
+                                maxLength={200}
+                                data-testid="input-custom-prompt"
+                                className="font-mono text-sm"
+                              />
+                              {customAmbientPrompt.length > 0 && (
+                                <p className="text-xs text-muted-foreground">
+                                  {customAmbientPrompt.length}/200 characters
+                                </p>
+                              )}
+                            </div>
+                            <Button 
+                              size="lg" 
+                              variant="secondary" 
+                              onClick={handlePreviewAmbient}
+                              disabled={enhancingAmbient}
+                              className="w-full"
+                              data-testid="button-preview-ambient"
+                            >
+                              {enhancingAmbient ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Generating Preview...
+                                </>
+                              ) : (
+                                <>
+                                  <Volume2 className="h-4 w-4 mr-2" />
+                                  Preview Ambient Sound
+                                </>
+                              )}
+                            </Button>
+                          </>
+                        ) : (
+                          <div className="space-y-3 p-4 border rounded-lg bg-card">
+                            <h3 className="text-sm font-semibold">Preview: {currentJob.metadata.ambientEnhancement.customPrompt || `${currentJob.metadata.ambientEnhancement.preset} ambience`}</h3>
+                            <audio 
+                              controls 
+                              className="w-full"
+                              data-testid="audio-preview-player"
+                            >
+                              <source src={currentJob.metadata.ambientEnhancement.previewAudioPath} type="audio/mpeg" />
+                              Your browser does not support the audio tag.
+                            </audio>
                             <p className="text-xs text-muted-foreground">
-                              {customAmbientPrompt.length}/200 characters
+                              Listen to the preview above. If you like it, click below to add it to your video.
                             </p>
-                          )}
-                        </div>
-                        <Button 
-                          size="lg" 
-                          variant="secondary" 
-                          onClick={handleEnhanceAmbient}
-                          disabled={enhancingAmbient}
-                          className="w-full"
-                          data-testid="button-enhance-ambient"
-                        >
-                          {enhancingAmbient ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Adding Ambient Sound...
-                            </>
-                          ) : (
-                            <>
-                              <Volume2 className="h-4 w-4 mr-2" />
-                              {currentJob.metadata?.ambientEnhancement?.status === "failed" 
-                                ? "Retry Ambient Enhancement" 
-                                : "Add Ambient Sound"}
-                            </>
-                          )}
-                        </Button>
+                            <Button 
+                              size="lg" 
+                              onClick={handleApplyAmbient}
+                              disabled={enhancingAmbient}
+                              className="w-full"
+                              data-testid="button-apply-ambient"
+                            >
+                              {enhancingAmbient ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Mixing with Video...
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="h-4 w-4 mr-2" />
+                                  Apply to Video
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
