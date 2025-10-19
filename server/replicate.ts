@@ -44,7 +44,8 @@ export class ReplicateService {
           language: "en",
           translate: false,
           temperature: 0,
-          transcription: "srt", // Get timestamps in SRT format
+          transcription: "verbose_json", // Get word-level timestamps
+          word_timestamps: true, // Enable word-level timing
           suppress_tokens: "-1",
           logprob_threshold: -1.0,
           no_speech_threshold: 0.6,
