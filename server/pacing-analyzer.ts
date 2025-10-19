@@ -95,24 +95,32 @@ export class PacingAnalyzer {
       const isLastWord = i === words.length - 1;
       const nextWord = i < words.length - 1 ? words[i + 1] : null;
       
-      // End phrase on: punctuation, long pause (>0.5s), or last word
+      // End phrase on: punctuation, pause (>0.25s), or last word
       const endsWithPunctuation = /[.!?,;:]$/.test(word.word);
-      const hasLongPause = nextWord && (nextWord.start - word.end) > 0.5;
+      const hasPause = nextWord && (nextWord.start - word.end) > 0.25;
       
-      if (endsWithPunctuation || hasLongPause || isLastWord) {
+      // Log pause detection for debugging
+      if (nextWord && (nextWord.start - word.end) > 0.2) {
+        console.log(`[PacingAnalyzer] Pause detected: ${word.word} -> ${nextWord.word} (${((nextWord.start - word.end) * 1000).toFixed(0)}ms)`);
+      }
+      
+      if (endsWithPunctuation || hasPause || isLastWord) {
         // Create phrase from accumulated words
         const phraseText = currentPhraseWords.map(w => w.word).join(' ');
         const startTime = currentPhraseWords[0].start;
         const endTime = currentPhraseWords[currentPhraseWords.length - 1].end;
         
+        const totalDuration = endTime - startTime;
+        
         phrases.push({
           text: phraseText,
           words: [...currentPhraseWords],
-          totalDuration: endTime - startTime,
+          totalDuration,
           startTime,
           endTime
         });
 
+        console.log(`[PacingAnalyzer] Phrase: "${phraseText}" (${totalDuration.toFixed(2)}s from ${startTime.toFixed(2)}s to ${endTime.toFixed(2)}s)`);
         currentPhraseWords = [];
       }
     }
