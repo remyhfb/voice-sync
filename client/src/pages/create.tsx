@@ -9,7 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, Loader2, Download, RotateCcw, BarChart3, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Sparkles, Loader2, Download, RotateCcw, BarChart3, AlertCircle, CheckCircle2, X } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { ProcessingJob } from "@shared/schema";
 
@@ -18,6 +18,7 @@ export default function CreatePage() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [analyzingPacing, setAnalyzingPacing] = useState(false);
+  const [successAlertDismissed, setSuccessAlertDismissed] = useState(false);
   const { toast } = useToast();
 
   const { data: currentJob } = useQuery<ProcessingJob>({
@@ -102,6 +103,7 @@ export default function CreatePage() {
     setVideoFile(null);
     setAudioFile(null);
     setCurrentJobId(null);
+    setSuccessAlertDismissed(false);
   };
 
   const handleVideoError = (projectId: string) => {
@@ -302,12 +304,23 @@ export default function CreatePage() {
 
             {currentJob.status === "completed" && currentJob.mergedVideoPath && (
               <div className="space-y-6">
-                <Alert className="bg-chart-2/10 border-chart-2" data-testid="alert-success">
-                  <CheckCircle2 className="h-5 w-5 text-chart-2" />
-                  <AlertDescription className="text-base">
-                    <strong>Success!</strong> Your lip-synced video is ready. If it is not perfectly synced up it means your audio was poorly paced or your video had AI artifacts that were not removed or there were inconsistencies between words in the script.
-                  </AlertDescription>
-                </Alert>
+                {!successAlertDismissed && (
+                  <Alert className="bg-chart-2/10 border-chart-2 relative" data-testid="alert-success">
+                    <CheckCircle2 className="h-5 w-5 text-chart-2" />
+                    <AlertDescription className="text-base pr-8">
+                      <strong>Success!</strong> Your lip-synced video is ready. If it is not perfectly synced up it means your audio was poorly paced or your video had AI artifacts that were not removed or there were inconsistencies between words in the script.
+                    </AlertDescription>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-2 right-2 h-6 w-6"
+                      onClick={() => setSuccessAlertDismissed(true)}
+                      data-testid="button-dismiss-alert"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </Alert>
+                )}
 
                 <Card>
                   <CardContent className="p-0">
