@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Video, Clock, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { Video, Clock, CheckCircle2, XCircle, Loader2, Download, Play, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,11 +7,24 @@ import { cn } from "@/lib/utils";
 import type { ProcessingJob } from "@shared/schema";
 import { AlignmentReport } from "@/components/AlignmentReport";
 import { useState } from "react";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ProjectsPage() {
   const { data: projects = [], isLoading } = useQuery<ProcessingJob[]>({
     queryKey: ["/api/jobs"],
   });
+  const [expandedVideo, setExpandedVideo] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const handleVideoError = (projectId: string) => {
+    toast({
+      variant: "destructive",
+      title: "Video playback error",
+      description: "Unable to load the video. The file may be corrupted or missing. Try downloading it instead.",
+    });
+    setExpandedVideo(null);
+  };
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -134,17 +147,30 @@ export default function ProjectsPage() {
                 </CardContent>
 
                 <CardFooter className="pt-4 border-t gap-2">
-                  {project.status === "completed" && (
+                  {project.status === "completed" && project.mergedVideoPath && (
                     <>
-                      <Button variant="outline" size="sm" className="flex-1" asChild>
-                        <a href="/">Create New</a>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex-1"
+                        onClick={() => setExpandedVideo(expandedVideo === project.id ? null : project.id)}
+                        data-testid={`button-watch-video-${project.id}`}
+                      >
+                        <Play className="h-4 w-4 mr-2" />
+                        {expandedVideo === project.id ? "Hide Video" : "Watch Video"}
                       </Button>
                       <Button size="sm" className="flex-1" asChild>
-                        <a href={project.mergedVideoPath || "#"} download data-testid="button-download">
+                        <a href={project.mergedVideoPath} download data-testid={`button-download-${project.id}`}>
+                          <Download className="h-4 w-4 mr-2" />
                           Download
                         </a>
                       </Button>
                     </>
+                  )}
+                  {project.status === "completed" && !project.mergedVideoPath && (
+                    <p className="text-sm text-muted-foreground text-center w-full py-2">
+                      Video file not available
+                    </p>
                   )}
                   {project.status === "processing" && (
                     <Button variant="outline" size="sm" className="w-full" disabled>
@@ -159,6 +185,25 @@ export default function ProjectsPage() {
                   )}
                 </CardFooter>
               </Card>
+
+              {project.status === "completed" && expandedVideo === project.id && project.mergedVideoPath && (
+                <Card>
+                  <CardContent className="p-0">
+                    <AspectRatio ratio={16/9}>
+                      <video
+                        key={project.mergedVideoPath}
+                        controls
+                        className="w-full h-full rounded-lg"
+                        onError={() => handleVideoError(project.id)}
+                        data-testid={`video-player-${project.id}`}
+                      >
+                        <source src={project.mergedVideoPath} type="video/mp4" />
+                        Your browser does not support the video tag.
+                      </video>
+                    </AspectRatio>
+                  </CardContent>
+                </Card>
+              )}
 
               {project.status === "completed" && project.metadata?.alignmentReport && (
                 <AlignmentReport report={project.metadata.alignmentReport} />
