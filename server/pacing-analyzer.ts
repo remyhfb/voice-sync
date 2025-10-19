@@ -41,6 +41,7 @@ export interface PhraseComparison {
 export interface PacingAnalysisReport {
   summary: {
     totalPhrases: number;
+    totalTimeDelta: number; // Sum of all time deltas
     avgTimeDelta: number;
     avgPercentDifference: number;
     tooFastCount: number;
@@ -337,6 +338,7 @@ export class PacingAnalyzer {
       return {
         summary: {
           totalPhrases: 0,
+          totalTimeDelta: 0,
           avgTimeDelta: 0,
           avgPercentDifference: 0,
           tooFastCount: 0,
@@ -350,7 +352,8 @@ export class PacingAnalyzer {
 
     // Calculate summary statistics
     const totalPhrases = comparisons.length;
-    const avgTimeDelta = comparisons.reduce((sum, c) => sum + c.timeDelta, 0) / totalPhrases;
+    const totalTimeDelta = comparisons.reduce((sum, c) => sum + c.timeDelta, 0);
+    const avgTimeDelta = totalTimeDelta / totalPhrases;
     const avgPercentDifference = comparisons.reduce((sum, c) => sum + c.percentDifference, 0) / totalPhrases;
     
     const tooFastCount = comparisons.filter(c => c.status === "too_fast").length;
@@ -379,6 +382,7 @@ export class PacingAnalyzer {
     return {
       summary: {
         totalPhrases,
+        totalTimeDelta,
         avgTimeDelta,
         avgPercentDifference,
         tooFastCount,

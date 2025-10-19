@@ -37,6 +37,7 @@ export const processingJobs = pgTable("processing_jobs", {
     pacingAnalysis?: {
       summary: {
         totalPhrases: number;
+        totalTimeDelta: number;
         avgTimeDelta: number;
         avgPercentDifference: number;
         tooFastCount: number;

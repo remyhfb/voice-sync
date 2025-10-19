@@ -22,6 +22,7 @@ interface PhraseComparison {
 interface PacingAnalysisReport {
   summary: {
     totalPhrases: number;
+    totalTimeDelta: number;
     avgTimeDelta: number;
     avgPercentDifference: number;
     tooFastCount: number;
@@ -104,6 +105,22 @@ export function PacingReport({ report }: PacingReportProps) {
       </CardHeader>
 
       <CardContent className="p-6 space-y-6">
+        {/* Total Delta - Most Important Metric */}
+        <div className="bg-primary/5 border border-primary/20 rounded-lg p-6">
+          <div className="text-center">
+            <div className="text-sm text-muted-foreground mb-2">Total Timing Delta (All Segments Combined)</div>
+            <div className="text-5xl font-bold font-mono">
+              {report.summary.totalTimeDelta >= 0 ? "+" : ""}
+              {report.summary.totalTimeDelta.toFixed(2)}s
+            </div>
+            <div className="text-sm text-muted-foreground mt-2">
+              {report.summary.totalTimeDelta > 0 ? "Your performance is slower than VEO" : 
+               report.summary.totalTimeDelta < 0 ? "Your performance is faster than VEO" : 
+               "Your performance matches VEO timing perfectly"}
+            </div>
+          </div>
+        </div>
+
         {/* Summary Stats */}
         <div className="grid grid-cols-3 gap-4">
           <div className="bg-muted/50 rounded-lg p-4">
