@@ -1,5 +1,5 @@
 import { Storage, File } from "@google-cloud/storage";
-import { Request, Response } from "express";
+import { Response } from "express";
 import { randomUUID } from "crypto";
 import {
   ObjectAclPolicy,
@@ -215,56 +215,13 @@ export class ObjectStorageService {
     return await canAccessObject({ userId, objectFile, requestedPermission });
   }
 
-  async downloadObject(file: File, req: Request, res: Response): Promise<void> {
-    try {
-      // Get file metadata for size
-      const [metadata] = await file.getMetadata();
-      const fileSize = parseInt(metadata.size?.toString() || "0");
-      
-      // Check for range request (required for video streaming)
-      const range = req.headers.range;
-      
-      if (range) {
-        // Parse range header (e.g., "bytes=0-1023")
-        const parts = range.replace(/bytes=/, "").split("-");
-        const start = parseInt(parts[0], 10);
-        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-        const chunkSize = end - start + 1;
-        
-        // Set 206 Partial Content response headers
-        res.status(206);
-        res.setHeader("Content-Range", `bytes ${start}-${end}/${fileSize}`);
-        res.setHeader("Accept-Ranges", "bytes");
-        res.setHeader("Content-Length", chunkSize);
-        
-        // Stream the requested byte range
-        file
-          .createReadStream({ start, end })
-          .on("error", (err) => {
-            console.error("Error streaming file range:", err);
-            if (!res.headersSent) {
-              res.status(500).send("Error streaming file");
-            }
-          })
-          .pipe(res);
-      } else {
-        // No range request - send entire file (for downloads)
-        res.setHeader("Content-Length", fileSize);
-        res.setHeader("Accept-Ranges", "bytes");
-        
-        file
-          .createReadStream()
-          .on("error", (err) => {
-            console.error("Error streaming file:", err);
-            if (!res.headersSent) {
-              res.status(500).send("Error streaming file");
-            }
-          })
-          .pipe(res);
-      }
-    } catch (err) {
-      console.error("Error getting file metadata:", err);
-      res.status(500).send("Error accessing file");
-    }
+  downloadObject(file: File, res: Response): void {
+    file
+      .createReadStream()
+      .on("error", (err) => {
+        console.error("Error streaming file:", err);
+        res.status(500).send("Error streaming file");
+      })
+      .pipe(res);
   }
 }
