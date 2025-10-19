@@ -305,7 +305,7 @@ export default function CreatePage() {
                 <Alert className="bg-chart-2/10 border-chart-2" data-testid="alert-success">
                   <CheckCircle2 className="h-5 w-5 text-chart-2" />
                   <AlertDescription className="text-base">
-                    <strong>Success!</strong> Your lip-synced video is ready. The video has been time-stretched to match your timing and perfectly lip-synced.
+                    <strong>Success!</strong> Your lip-synced video is ready. If it is not perfectly synced up it means your audio was poorly paced or your video had AI artifacts that were not removed or there were inconsistencies between words in the script.
                   </AlertDescription>
                 </Alert>
 
