@@ -7,8 +7,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, Loader2, Download, RotateCcw, BarChart3 } from "lucide-react";
+import { Sparkles, Loader2, Download, RotateCcw, BarChart3, AlertCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { ProcessingJob } from "@shared/schema";
 
@@ -237,6 +238,12 @@ export default function CreatePage() {
               Record yourself performing the same script as the VEO video. 
               The AI will time-stretch the video to match your timing and apply perfect lip-sync.
             </p>
+            <Alert className="mb-4" data-testid="alert-audio-requirements">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Important:</strong> Your audio must include every single word from the VEO video, even words you don't intend to use in the final version. You can edit later.
+              </AlertDescription>
+            </Alert>
             <FileUploadZone
               onFilesSelected={handleAudioUpload}
               accept="audio/*"
