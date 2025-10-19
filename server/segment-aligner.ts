@@ -58,7 +58,6 @@ export class SegmentAligner {
 
   /**
    * Transcribe audio and extract word-level segments with pauses
-   * Uses word-level timestamps to calculate accurate speech duration (excludes leading/trailing silence)
    */
   async extractSegments(audioPath: string): Promise<TimeSegment[]> {
     const transcriptData = await this.replicate.transcribeWithTimestamps(audioPath);
@@ -79,23 +78,12 @@ export class SegmentAligner {
     for (let i = 0; i < transcriptData.segments.length; i++) {
       const segment = transcriptData.segments[i];
       
-      // Calculate TRUE speech duration using word-level timestamps
-      // This excludes leading/trailing pauses within the segment
-      let speechStart = segment.start;
-      let speechEnd = segment.end;
-      
-      if (segment.words && segment.words.length > 0) {
-        // Use first word start and last word end for accurate timing
-        speechStart = segment.words[0].start;
-        speechEnd = segment.words[segment.words.length - 1].end;
-      }
-      
-      // Add speech segment with accurate timing
+      // Add speech segment
       segments.push({
         text: segment.text,
-        start: speechStart,
-        end: speechEnd,
-        duration: speechEnd - speechStart,
+        start: segment.start,
+        end: segment.end,
+        duration: segment.end - segment.start,
         type: "speech"
       });
 
@@ -260,9 +248,9 @@ export class SegmentAligner {
     const set2 = new Set(words2);
     let overlap = 0;
 
-    Array.from(set1).forEach(word => {
+    for (const word of set1) {
       if (set2.has(word)) overlap++;
-    });
+    }
 
     // Jaccard similarity: intersection / union
     const union = set1.size + set2.size - overlap;
@@ -316,24 +304,16 @@ export class SegmentAligner {
         alignment.userSegment.text
       );
 
-      // Calculate severity based on TIMING/PACE issues the user should fix
-      // Focus: How much does the user need to adjust their delivery speed?
+      // Calculate severity
       let severity: "critical" | "major" | "minor" | "perfect";
-      
-      const timingDeviation = Math.abs(ratio - 1.0);
-      
-      if (timingDeviation < 0.05) {
-        // Within 5% - perfect timing
-        severity = "perfect";
-      } else if (timingDeviation < 0.15) {
-        // 5-15% off - minor adjustment recommended
-        severity = "minor";
-      } else if (timingDeviation < 0.30) {
-        // 15-30% off - significant adjustment needed
-        severity = "major";
+      if (Math.abs(ratio - 1.0) < 0.05) {
+        severity = "perfect"; // Within 5%
+      } else if (Math.abs(ratio - 1.0) < 0.15) {
+        severity = "minor"; // Within 15%
+      } else if (Math.abs(ratio - 1.0) < 0.30) {
+        severity = "major"; // Within 30%
       } else {
-        // >30% off - critical, needs re-recording with better timing
-        severity = "critical";
+        severity = "critical"; // >30% off
       }
 
       // Calculate speed change description
@@ -421,26 +401,34 @@ export class SegmentAligner {
       overallTiming = "perfect";
     }
 
-    // Generate recommendations - Focus on TIMING/PACE adjustments
+    // Generate recommendations
     const recommendations: string[] = [];
     
-    if (criticalIssues === 0 && majorIssues === 0 && minorIssues === 0) {
-      recommendations.push("✅ Perfect timing! Your pace matches VEO's delivery almost exactly. No adjustments needed.");
-    } else if (criticalIssues === 0 && majorIssues === 0) {
-      recommendations.push("✅ Great timing! Only minor pace differences (all under 15%). Your delivery works well.");
+    if (alignmentQuality === "excellent") {
+      recommendations.push("🎉 Excellent alignment! Your timing closely matches the VEO video.");
+    } else if (alignmentQuality === "good") {
+      recommendations.push("✅ Good alignment overall. Minor adjustments applied.");
+    } else if (alignmentQuality === "acceptable") {
+      recommendations.push("⚠️ Acceptable alignment with some timing differences. Consider re-recording problematic segments.");
     } else {
-      if (criticalIssues > 0) {
-        recommendations.push(`🚨 ${criticalIssues} segment${criticalIssues > 1 ? 's have' : ' has'} significant timing issues (>30% off). Re-record these with pace much closer to VEO's delivery.`);
-      }
-      
-      if (majorIssues > 0) {
-        recommendations.push(`⚠️ ${majorIssues} segment${majorIssues > 1 ? 's need' : ' needs'} pace adjustment (15-30% off). See details below for specific timing guidance.`);
-      }
-      
-      recommendations.push("💡 Review the 'Top Issues to Fix' section below for specific timing adjustments needed for each segment.");
+      recommendations.push("❌ Poor alignment detected. Your voice timing significantly differs from the video. Please re-record with timing closer to the VEO video.");
     }
 
-    // Identify top problem segments - Focus on TIMING/PACE adjustments
+    if (overallTiming === "too_slow") {
+      recommendations.push(`🐌 You're speaking ${Math.round((avgRatio - 1) * 100)}% slower than VEO on average. Try speeding up your delivery.`);
+    } else if (overallTiming === "too_fast") {
+      recommendations.push(`🏃 You're speaking ${Math.round((1 - avgRatio) * 100)}% faster than VEO on average. Try slowing down your delivery.`);
+    }
+
+    if (criticalIssues > 0) {
+      recommendations.push(`🚨 ${criticalIssues} segment${criticalIssues > 1 ? 's' : ''} with critical timing issues (>30% off). Focus on these first.`);
+    }
+
+    if (majorIssues > 0) {
+      recommendations.push(`⚠️ ${majorIssues} segment${majorIssues > 1 ? 's' : ''} with major timing issues (15-30% off). Work on improving these.`);
+    }
+
+    // Identify top problem segments
     const problemSegments = segments
       .filter(s => s.severity === "critical" || s.severity === "major")
       .sort((a, b) => Math.abs(b.timeStretchRatio - 1.0) - Math.abs(a.timeStretchRatio - 1.0))
@@ -449,18 +437,18 @@ export class SegmentAligner {
         let issue: string;
         let recommendation: string;
 
-        const timeDiff = seg.userTiming.duration - seg.veoTiming.duration;
-        const percentOff = Math.round(Math.abs(seg.timeStretchRatio - 1.0) * 100);
-        const secondsOff = Math.abs(timeDiff).toFixed(1);
-
-        if (seg.timeStretchRatio > 1.0) {
-          // User was slower than VEO
-          issue = `You're ${percentOff}% slower than VEO`;
-          recommendation = `Speed up your delivery by ${percentOff}%, shaving ${secondsOff} second${secondsOff === '1.0' ? '' : 's'} off`;
+        if (seg.timeStretchRatio > 1.3) {
+          issue = `You're ${Math.round((seg.timeStretchRatio - 1) * 100)}% slower than VEO`;
+          recommendation = "Speed up this line significantly - try saying it faster";
+        } else if (seg.timeStretchRatio > 1.1) {
+          issue = `You're ${Math.round((seg.timeStretchRatio - 1) * 100)}% slower than VEO`;
+          recommendation = "Increase your pace for this line";
+        } else if (seg.timeStretchRatio < 0.7) {
+          issue = `You're ${Math.round((1 - seg.timeStretchRatio) * 100)}% faster than VEO`;
+          recommendation = "Slow down this line significantly - take your time";
         } else {
-          // User was faster than VEO
-          issue = `You're ${percentOff}% faster than VEO`;
-          recommendation = `Slow down your delivery by ${percentOff}%, adding ${secondsOff} second${secondsOff === '1.0' ? '' : 's'}`;
+          issue = `You're ${Math.round((1 - seg.timeStretchRatio) * 100)}% faster than VEO`;
+          recommendation = "Decrease your pace for this line";
         }
 
         return {

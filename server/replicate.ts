@@ -28,7 +28,7 @@ export class ReplicateService {
       }>;
     }>;
   }> {
-    console.log(`[Replicate] Transcribing audio with word-level timestamps: ${audioPath}`);
+    console.log(`[Replicate] Transcribing audio with timestamps: ${audioPath}`);
     
     // Read audio file as base64
     const audioBuffer = await fs.readFile(audioPath);
@@ -36,7 +36,7 @@ export class ReplicateService {
     const audioDataUri = `data:audio/mpeg;base64,${audioBase64}`;
 
     const output = await this.client.run(
-      "openai/whisper:91ee9c0c3df30478510ff8c8a3a545add1ad0259ad3a9f78fba57fbc05ee64f7",
+      "openai/whisper:4d50797290df275329f202e48c76360b3f22b08d28c196cbc54600319435f8d2",
       {
         input: {
           audio: audioDataUri,
@@ -44,26 +44,27 @@ export class ReplicateService {
           language: "en",
           translate: false,
           temperature: 0,
-          word_timestamps: true,  // Enable word-level timestamps
+          transcription: "srt", // Get timestamps in SRT format
           suppress_tokens: "-1",
-          condition_on_previous_text: true
+          logprob_threshold: -1.0,
+          no_speech_threshold: 0.6,
+          condition_on_previous_text: true,
+          compression_ratio_threshold: 2.4,
+          temperature_increment_on_fallback: 0.2,
         }
       }
     ) as any;
 
     console.log(`[Replicate] Whisper output:`, JSON.stringify(output).substring(0, 500));
 
+    // Parse the output to extract segments with timestamps
     const result = {
       text: output.text || output.transcription || "",
       segments: output.segments || []
     };
 
     console.log(`[Replicate] Transcription: ${result.text.substring(0, 200)}...`);
-    console.log(`[Replicate] Found ${result.segments.length} segments`);
-    
-    // Log word count for verification
-    const totalWords = result.segments.reduce((sum: number, seg: any) => sum + (seg.words?.length || 0), 0);
-    console.log(`[Replicate] Total words with timestamps: ${totalWords}`);
+    console.log(`[Replicate] Found ${result.segments.length} segments with timestamps`);
     
     return result;
   }
