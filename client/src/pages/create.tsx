@@ -3,12 +3,12 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { FileUploadZone } from "@/components/file-upload-zone";
 import { ProcessingTimeline, ProcessingStep } from "@/components/processing-timeline";
 import { PacingReport } from "@/components/PacingReport";
-import { SoundDesignReport } from "@/components/SoundDesignReport";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Sparkles, Loader2, Download, RotateCcw, BarChart3, AlertCircle, CheckCircle2, X, Volume2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -19,7 +19,8 @@ export default function CreatePage() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [analyzingPacing, setAnalyzingPacing] = useState(false);
-  const [regeneratingSoundDesign, setRegeneratingSoundDesign] = useState(false);
+  const [enhancingAmbient, setEnhancingAmbient] = useState(false);
+  const [selectedAmbientType, setSelectedAmbientType] = useState<string>("office");
   const [successAlertDismissed, setSuccessAlertDismissed] = useState(false);
   const { toast } = useToast();
 
@@ -106,7 +107,7 @@ export default function CreatePage() {
     setAudioFile(null);
     setCurrentJobId(null);
     setSuccessAlertDismissed(false);
-    setRegeneratingSoundDesign(false);
+    setEnhancingAmbient(false);
   };
 
   const handleVideoError = (projectId: string) => {
@@ -150,16 +151,18 @@ export default function CreatePage() {
     }
   };
 
-  const handleRegenerateSoundDesign = async () => {
+  const handleEnhanceAmbient = async () => {
     if (!currentJobId) return;
     
-    setRegeneratingSoundDesign(true);
+    setEnhancingAmbient(true);
     try {
-      await apiRequest("POST", `/api/jobs/${currentJobId}/regenerate-sound-design`);
+      await apiRequest("POST", `/api/jobs/${currentJobId}/enhance-ambient`, {
+        ambientType: selectedAmbientType
+      });
       
       toast({
-        title: "Sound design regeneration started",
-        description: "Analyzing and regenerating sound design... This may take a few minutes.",
+        title: "Ambient sound enhancement started",
+        description: `Adding ${selectedAmbientType} ambience to your video...`,
       });
 
       // Poll for updates
@@ -168,26 +171,26 @@ export default function CreatePage() {
         const job = queryClient.getQueryData<ProcessingJob>(["/api/jobs", currentJobId]);
         
         // Stop polling when processing completes or fails
-        if (job?.metadata?.soundDesignAnalysis && 
-            job.metadata.soundDesignAnalysis.status !== "processing") {
+        if (job?.metadata?.ambientEnhancement && 
+            job.metadata.ambientEnhancement.status !== "processing") {
           clearInterval(pollInterval);
-          setRegeneratingSoundDesign(false);
+          setEnhancingAmbient(false);
         }
       }, 3000);
 
-      // Timeout after 5 minutes as fallback
+      // Timeout after 3 minutes as fallback
       setTimeout(() => {
         clearInterval(pollInterval);
-        setRegeneratingSoundDesign(false);
-      }, 300000);
+        setEnhancingAmbient(false);
+      }, 180000);
       
     } catch (error: any) {
       toast({
-        title: "Sound design regeneration failed",
-        description: error.message || "Failed to regenerate sound design",
+        title: "Ambient enhancement failed",
+        description: error.message || "Failed to add ambient sound",
         variant: "destructive",
       });
-      setRegeneratingSoundDesign(false);
+      setEnhancingAmbient(false);
     }
   };
 
@@ -388,8 +391,19 @@ export default function CreatePage() {
                   <PacingReport report={currentJob.metadata.pacingAnalysis} />
                 )}
 
-                {currentJob.metadata?.soundDesignAnalysis && (
-                  <SoundDesignReport analysis={currentJob.metadata.soundDesignAnalysis} />
+                {currentJob.metadata?.ambientEnhancement?.status === "completed" && (
+                  <Card className="p-6">
+                    <h2 className="text-xl font-semibold mb-2">Ambient Sound Enhancement</h2>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Enhanced with {currentJob.metadata.ambientEnhancement.ambientType} ambience
+                    </p>
+                    <Button size="lg" asChild className="w-full">
+                      <a href={currentJob.metadata.ambientEnhancement.enhancedVideoPath} download data-testid="button-download-enhanced">
+                        <Download className="h-4 w-4 mr-2" />
+                        Download Enhanced Video
+                      </a>
+                    </Button>
+                  </Card>
                 )}
 
                 <Card className="p-6">
@@ -431,30 +445,48 @@ export default function CreatePage() {
                       </Button>
                     )}
 
-                    {(!currentJob.metadata?.soundDesignAnalysis || 
-                      currentJob.metadata.soundDesignAnalysis.status === "failed") && (
-                      <Button 
-                        size="lg" 
-                        variant="secondary" 
-                        onClick={handleRegenerateSoundDesign}
-                        disabled={regeneratingSoundDesign}
-                        className="w-full"
-                        data-testid="button-regenerate-sound-design"
-                      >
-                        {regeneratingSoundDesign ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Regenerating Sound Design...
-                          </>
-                        ) : (
-                          <>
-                            <Volume2 className="h-4 w-4 mr-2" />
-                            {currentJob.metadata?.soundDesignAnalysis?.status === "failed" 
-                              ? "Retry Sound Design Regeneration" 
-                              : "Regenerate Sound Design (Beta)"}
-                          </>
-                        )}
-                      </Button>
+                    {(!currentJob.metadata?.ambientEnhancement || 
+                      currentJob.metadata.ambientEnhancement.status === "failed") && (
+                      <div className="space-y-3">
+                        <div className="flex flex-col gap-2">
+                          <label className="text-sm font-medium">Add Ambient Sound (Optional)</label>
+                          <Select value={selectedAmbientType} onValueChange={setSelectedAmbientType}>
+                            <SelectTrigger data-testid="select-ambient-type">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="office" data-testid="option-office">Office</SelectItem>
+                              <SelectItem value="cafe" data-testid="option-cafe">Café</SelectItem>
+                              <SelectItem value="nature" data-testid="option-nature">Nature</SelectItem>
+                              <SelectItem value="city" data-testid="option-city">City Street</SelectItem>
+                              <SelectItem value="studio" data-testid="option-studio">Studio</SelectItem>
+                              <SelectItem value="home" data-testid="option-home">Home</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button 
+                          size="lg" 
+                          variant="secondary" 
+                          onClick={handleEnhanceAmbient}
+                          disabled={enhancingAmbient}
+                          className="w-full"
+                          data-testid="button-enhance-ambient"
+                        >
+                          {enhancingAmbient ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Adding Ambient Sound...
+                            </>
+                          ) : (
+                            <>
+                              <Volume2 className="h-4 w-4 mr-2" />
+                              {currentJob.metadata?.ambientEnhancement?.status === "failed" 
+                                ? "Retry Ambient Enhancement" 
+                                : "Add Ambient Sound"}
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </Card>

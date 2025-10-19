@@ -549,10 +549,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Sound Design Regeneration (Stage 2) - Optional feature after lip-sync completion
-  app.post("/api/jobs/:jobId/regenerate-sound-design", async (req, res) => {
+  // Ambient Sound Enhancement - Simple feature using ElevenLabs
+  app.post("/api/jobs/:jobId/enhance-ambient", async (req, res) => {
     try {
       const { jobId } = req.params;
+      const { ambientType } = req.body;
+      
       const job = await storage.getProcessingJob(jobId);
 
       if (!job) {
@@ -560,25 +562,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (job.status !== "completed") {
-        return res.status(400).json({ error: "Job must be completed before regenerating sound design" });
+        return res.status(400).json({ error: "Job must be completed before adding ambient sound" });
       }
 
-      if (!job.metadata?.originalVideoPath || !job.mergedVideoPath) {
+      if (!job.mergedVideoPath) {
         return res.status(400).json({ 
-          error: "Required video files not available. Cannot regenerate sound design." 
+          error: "Video file not available" 
         });
       }
 
-      // Return immediately - regeneration runs in background
-      res.json({ message: "Sound design regeneration started", jobId });
+      // Validate ambient type
+      if (!ambientType || !['office', 'cafe', 'nature', 'city', 'studio', 'home'].includes(ambientType)) {
+        return res.status(400).json({ 
+          error: "Invalid ambient type. Choose: office, cafe, nature, city, studio, or home" 
+        });
+      }
 
-      // Run regeneration asynchronously
+      // Return immediately - enhancement runs in background
+      res.json({ message: "Ambient sound enhancement started", jobId });
+
+      // Run enhancement asynchronously
       (async () => {
-        const originalVideoTempPath = `/tmp/original_video_${jobId}.mp4`;
         try {
           const { soundRegenerator } = await import("./sound-regenerator");
           
-          logger.info(`Job:${jobId}`, "Starting sound design regeneration");
+          logger.info(`Job:${jobId}`, "Starting ambient sound enhancement", { ambientType });
           
           // Re-fetch latest job to preserve all metadata
           let latestJob = await storage.getProcessingJob(jobId);
@@ -587,34 +595,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.updateProcessingJob(jobId, {
             metadata: {
               ...(latestJob?.metadata || {}),
-              soundDesignAnalysis: {
+              ambientEnhancement: {
                 status: "processing",
-                detectedSounds: [],
-                generatedPrompts: [],
-                regeneratedAudioPaths: {}
+                ambientType
               }
             }
           });
 
-          // Download original video from object storage
-          logger.info(`Job:${jobId}`, "Downloading original video from object storage");
-          const domain = process.env.REPLIT_DOMAINS?.split(',')[0];
-          const originalVideoUrl = domain 
-            ? `https://${domain}${job.metadata!.originalVideoPath!}`
-            : `http://localhost:5000${job.metadata!.originalVideoPath!}`;
-          const videoResponse = await fetch(originalVideoUrl);
-          if (!videoResponse.ok) {
-            throw new Error(`Failed to download original video: ${videoResponse.statusText}`);
-          }
-          const videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
-          await fs.writeFile(originalVideoTempPath, videoBuffer);
-
-          // Run the complete pipeline
-          const result = await soundRegenerator.regenerateSoundDesign(
-            originalVideoTempPath,
+          // Run the enhancement
+          const result = await soundRegenerator.enhanceWithAmbient(
             job.mergedVideoPath!,
+            ambientType,
             '/tmp/sound-design'
           );
+
+          // Upload enhanced video to object storage
+          const objectStorageService = new ObjectStorageService();
+          const uploadUrl = await objectStorageService.getObjectEntityUploadURL();
+          const videoBuffer = await fs.readFile(result.enhancedVideoPath);
+          
+          await fetch(uploadUrl, {
+            method: 'PUT',
+            body: videoBuffer,
+            headers: {
+              'Content-Type': 'video/mp4',
+              'Content-Length': videoBuffer.length.toString(),
+            },
+          });
+
+          const urlParts = uploadUrl.split('?')[0].split('/');
+          const objectId = urlParts[urlParts.length - 1];
+          const enhancedVideoPath = `/objects/uploads/${objectId}`;
 
           // Re-fetch latest job to preserve all metadata
           latestJob = await storage.getProcessingJob(jobId);
@@ -623,27 +634,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.updateProcessingJob(jobId, {
             metadata: {
               ...(latestJob?.metadata || {}),
-              soundDesignAnalysis: {
+              ambientEnhancement: {
                 status: "completed" as const,
-                detectedSounds: result.detectedSounds as Array<{
-                  timestamp: number;
-                  label: string;
-                  confidence: number;
-                  category: "ambient" | "effect" | "music" | "other";
-                }>,
-                generatedPrompts: result.generatedPrompts,
-                regeneratedAudioPaths: result.regeneratedAudioPaths,
-                enhancedVideoPath: result.enhancedVideoPath
+                ambientType: result.ambientType,
+                ambientPrompt: result.ambientPrompt,
+                enhancedVideoPath
               }
             }
           });
 
-          logger.info(`Job:${jobId}`, "Sound design regeneration complete", {
-            detectedSounds: result.detectedSounds.length,
-            hasEnhanced: !!result.enhancedVideoPath
+          logger.info(`Job:${jobId}`, "Ambient sound enhancement complete", {
+            ambientType: result.ambientType
           });
         } catch (error: any) {
-          logger.error(`Job:${jobId}`, "Sound design regeneration failed", error);
+          logger.error(`Job:${jobId}`, "Ambient sound enhancement failed", error);
           
           // Re-fetch latest job to preserve all metadata
           const latestJobError = await storage.getProcessingJob(jobId);
@@ -652,23 +656,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.updateProcessingJob(jobId, {
             metadata: {
               ...(latestJobError?.metadata || {}),
-              soundDesignAnalysis: {
+              ambientEnhancement: {
                 status: "failed" as const,
-                detectedSounds: [],
-                generatedPrompts: [],
-                regeneratedAudioPaths: {},
+                ambientType: req.body.ambientType,
                 errorMessage: error.message
               }
             }
           });
-        } finally {
-          // Cleanup temp file
-          await fs.unlink(originalVideoTempPath).catch(() => {});
         }
       })();
     } catch (error: any) {
-      logger.error("Routes", "Error starting sound design regeneration", error);
-      res.status(500).json({ error: error.message || "Failed to start sound design regeneration" });
+      logger.error("Routes", "Error starting ambient enhancement", error);
+      res.status(500).json({ error: error.message || "Failed to start ambient enhancement" });
     }
   });
 

@@ -504,4 +504,65 @@ export class FFmpegService {
         .run();
     });
   }
+
+  /**
+   * Mix ambient audio with video
+   */
+  async mixAudioWithVideo(
+    videoPath: string,
+    ambientAudioPath: string,
+    outputPath: string,
+    options: {
+      loop?: boolean;
+      videoVolume?: number;
+      ambientVolume?: number;
+    } = {}
+  ): Promise<void> {
+    const { loop = true, videoVolume = 1.0, ambientVolume = 0.15 } = options;
+
+    logger.debug("FFmpeg", "Mixing ambient audio with video", {
+      video: path.basename(videoPath),
+      ambient: path.basename(ambientAudioPath),
+      loop,
+      videoVol: videoVolume,
+      ambientVol: ambientVolume
+    });
+
+    return new Promise((resolve, reject) => {
+      const command = ffmpeg()
+        .input(videoPath)
+        .input(ambientAudioPath);
+
+      if (loop) {
+        // Loop ambient audio to match video duration
+        command.inputOptions(['-stream_loop', '-1']); // Loop second input infinitely
+      }
+
+      command
+        .complexFilter([
+          // Mix audio streams: original video audio + ambient (looped if needed)
+          // volume=1.0 keeps original, volume=0.15 makes ambient subtle
+          `[0:a]volume=${videoVolume}[a0]`,
+          `[1:a]volume=${ambientVolume}[a1]`,
+          `[a0][a1]amix=inputs=2:duration=first:dropout_transition=2[aout]`
+        ])
+        .outputOptions([
+          '-map', '0:v',      // Use video from first input
+          '-map', '[aout]',   // Use mixed audio
+          '-c:v', 'copy',     // Copy video codec (no re-encode)
+          '-c:a', 'aac',      // Encode audio as AAC
+          '-b:a', '192k',     // Audio bitrate
+          '-shortest'         // End when shortest stream (video) ends
+        ])
+        .output(outputPath)
+        .on("end", () => {
+          logger.info("FFmpeg", "Audio mixing complete");
+          resolve();
+        })
+        .on("error", (err: any) => {
+          reject(new Error(`FFmpeg mix error: ${err.message}`));
+        })
+        .run();
+    });
+  }
 }

@@ -87,6 +87,13 @@ export const processingJobs = pgTable("processing_jobs", {
       enhancedVideoPath?: string;
       errorMessage?: string;
     };
+    ambientEnhancement?: {
+      status: "processing" | "completed" | "failed";
+      ambientType: "office" | "cafe" | "nature" | "city" | "studio" | "home";
+      ambientPrompt?: string;
+      enhancedVideoPath?: string;
+      errorMessage?: string;
+    };
     errorMessage?: string;
     errorStack?: string;
   }>(),
