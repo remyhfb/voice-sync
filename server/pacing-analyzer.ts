@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
 import { ObjectStorageService } from "./objectStorage";
+import { logger } from "./logger";
 
 // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY_PACING });
@@ -58,7 +59,7 @@ export class PacingAnalyzer {
    * Using verbose_json format for word-level timestamps
    */
   async transcribeWithWordTimestamps(audioPath: string): Promise<WordTiming[]> {
-    console.log(`[PacingAnalyzer] Transcribing audio: ${audioPath}`);
+    logger.debug("PacingAnalyzer", "Transcribing audio");
     
     const audioReadStream = fs.createReadStream(audioPath);
 
@@ -83,7 +84,7 @@ export class PacingAnalyzer {
       }
     }
 
-    console.log(`[PacingAnalyzer] Extracted ${words.length} words with timestamps`);
+    logger.info("PacingAnalyzer", "Transcription complete", { wordCount: words.length });
     return words;
   }
 
@@ -109,11 +110,6 @@ export class PacingAnalyzer {
       const endsWithPunctuation = /[.!?,;:]$/.test(word.word);
       const hasPause = nextWord && (nextWord.start - word.end) > 0.25;
       
-      // Log pause detection for debugging
-      if (nextWord && (nextWord.start - word.end) > 0.2) {
-        console.log(`[PacingAnalyzer] Pause detected: ${word.word} -> ${nextWord.word} (${((nextWord.start - word.end) * 1000).toFixed(0)}ms)`);
-      }
-      
       if (endsWithPunctuation || hasPause || isLastWord) {
         // Create phrase from accumulated words
         const phraseText = currentPhraseWords.map(w => w.word).join(' ');
@@ -130,7 +126,10 @@ export class PacingAnalyzer {
           endTime
         });
 
-        console.log(`[PacingAnalyzer] Phrase: "${phraseText}" (${totalDuration.toFixed(2)}s from ${startTime.toFixed(2)}s to ${endTime.toFixed(2)}s)`);
+        logger.debug("PacingAnalyzer", "Phrase detected", { 
+          text: phraseText.substring(0, 50), 
+          duration: totalDuration 
+        });
         currentPhraseWords = [];
       }
     }
@@ -238,7 +237,11 @@ export class PacingAnalyzer {
     // First, align words to handle segmentation differences
     const wordAlignments = this.alignWords(veoWords, userWords);
     
-    console.log(`[PacingAnalyzer] Aligned ${wordAlignments.length} words with avg confidence ${(wordAlignments.reduce((sum, a) => sum + a.confidence, 0) / wordAlignments.length).toFixed(2)}`);
+    const avgConfidence = wordAlignments.reduce((sum, a) => sum + a.confidence, 0) / wordAlignments.length;
+    logger.debug("PacingAnalyzer", "Word alignment complete", { 
+      alignments: wordAlignments.length, 
+      avgConfidence: avgConfidence.toFixed(2) 
+    });
     
     const comparisons: PhraseComparison[] = [];
     
@@ -252,8 +255,6 @@ export class PacingAnalyzer {
     for (let i = 0; i < veoPhrases.length; i++) {
       const veoPhrase = veoPhrases[i];
       
-      console.log(`[PacingAnalyzer] Processing VEO phrase ${i + 1}/${veoPhrases.length}: "${veoPhrase.text}"`);
-      
       // Find global word indices for this VEO phrase
       const veoWordIndices: number[] = [];
       for (let j = 0; j < veoPhrase.words.length; j++) {
@@ -264,18 +265,14 @@ export class PacingAnalyzer {
         }
       }
       
-      console.log(`[PacingAnalyzer]   VEO phrase has ${veoPhrase.words.length} words, mapped to global indices: ${veoWordIndices.join(', ')}`);
-      
       // Find aligned user word indices
       const alignedUserIndices = wordAlignments
         .filter(a => veoWordIndices.includes(a.veoWordIndex))
         .map(a => a.userWordIndex)
         .sort((a, b) => a - b); // Sort to ensure chronological order
       
-      console.log(`[PacingAnalyzer]   Aligned to ${alignedUserIndices.length} user words at indices: ${alignedUserIndices.join(', ')}`);
-      
       if (alignedUserIndices.length === 0) {
-        console.log(`[PacingAnalyzer]   WARNING: No user words aligned for VEO phrase "${veoPhrase.text}", skipping`);
+        logger.warn("PacingAnalyzer", "No aligned user words for VEO phrase", { phrase: veoPhrase.text.substring(0, 30) });
         continue;
       }
       
@@ -288,11 +285,9 @@ export class PacingAnalyzer {
       const userEndTime = userAlignedWords[userAlignedWords.length - 1].end;
       const userDuration = userEndTime - userStartTime;
       
-      console.log(`[PacingAnalyzer]   User phrase: "${userPhraseText}" (${userDuration.toFixed(2)}s)`);
-      
       // Calculate confidence based on word alignment quality
       const relevantAlignments = wordAlignments.filter(a => veoWordIndices.includes(a.veoWordIndex));
-      const avgConfidence = relevantAlignments.length > 0 ?
+      const phraseConfidence = relevantAlignments.length > 0 ?
         relevantAlignments.reduce((sum, a) => sum + a.confidence, 0) / relevantAlignments.length : 0;
       
       const timeDelta = userDuration - veoPhrase.totalDuration;
@@ -307,8 +302,6 @@ export class PacingAnalyzer {
         status = "too_slow";
       }
       
-      console.log(`[PacingAnalyzer]   Delta: ${timeDelta.toFixed(2)}s (${percentDifference.toFixed(1)}%) - ${status}`);
-      
       comparisons.push({
         phraseIndex: i,
         veoPhrase,
@@ -322,11 +315,14 @@ export class PacingAnalyzer {
         timeDelta,
         percentDifference,
         status,
-        confidence: avgConfidence
+        confidence: phraseConfidence
       });
     }
 
-    console.log(`[PacingAnalyzer] Created ${comparisons.length} phrase comparisons from ${veoPhrases.length} VEO phrases`);
+    logger.info("PacingAnalyzer", "Phrase alignment complete", { 
+      comparisons: comparisons.length, 
+      veoPhrases: veoPhrases.length 
+    });
     return comparisons;
   }
 
@@ -398,7 +394,7 @@ export class PacingAnalyzer {
    * Download audio file from object storage to temporary location
    */
   private async downloadAudioFile(objectPath: string, objectStorageService: ObjectStorageService): Promise<string> {
-    console.log(`[PacingAnalyzer] Downloading ${objectPath} to temporary location`);
+    logger.debug("PacingAnalyzer", "Downloading audio file");
     
     const file = await objectStorageService.getObjectEntityFile(objectPath);
     const tempFilePath = path.join('/tmp', `pacing_${Date.now()}_${path.basename(objectPath)}.mp3`);
@@ -413,7 +409,7 @@ export class PacingAnalyzer {
         .on('error', reject);
     });
     
-    console.log(`[PacingAnalyzer] Downloaded to ${tempFilePath}`);
+    logger.debug("PacingAnalyzer", "Audio file downloaded");
     return tempFilePath;
   }
 
@@ -425,9 +421,7 @@ export class PacingAnalyzer {
     userAudioPath: string,
     objectStorageService: ObjectStorageService
   ): Promise<PacingAnalysisReport> {
-    console.log(`[PacingAnalyzer] Starting pacing analysis`);
-    console.log(`[PacingAnalyzer] VEO audio: ${veoAudioPath}`);
-    console.log(`[PacingAnalyzer] User audio: ${userAudioPath}`);
+    logger.info("PacingAnalyzer", "Starting pacing analysis");
 
     let localVeoPath: string | null = null;
     let localUserPath: string | null = null;
@@ -445,13 +439,19 @@ export class PacingAnalyzer {
         this.transcribeWithWordTimestamps(localUserPath)
       ]);
 
-      console.log(`[PacingAnalyzer] VEO: ${veoWords.length} words, User: ${userWords.length} words`);
+      logger.debug("PacingAnalyzer", "Transcription complete", { 
+        veoWords: veoWords.length, 
+        userWords: userWords.length 
+      });
 
       // Step 2: Group words into phrases
       const veoPhrases = this.groupWordsIntoPhrases(veoWords);
       const userPhrases = this.groupWordsIntoPhrases(userWords);
 
-      console.log(`[PacingAnalyzer] VEO: ${veoPhrases.length} phrases, User: ${userPhrases.length} phrases`);
+      logger.debug("PacingAnalyzer", "Phrase grouping complete", { 
+        veoPhrases: veoPhrases.length, 
+        userPhrases: userPhrases.length 
+      });
 
       // Step 3: Align and compare phrases using word-level alignment
       const comparisons = this.alignPhrases(veoWords, userWords, veoPhrases, userPhrases);
@@ -459,7 +459,9 @@ export class PacingAnalyzer {
       // Step 4: Generate report
       const report = this.generateReport(comparisons);
 
-      console.log(`[PacingAnalyzer] Analysis complete. Avg difference: ${report.summary.avgPercentDifference.toFixed(1)}%`);
+      logger.info("PacingAnalyzer", "Analysis complete", { 
+        avgDiff: report.summary.avgPercentDifference.toFixed(1) 
+      });
 
       return report;
     } finally {
@@ -467,17 +469,17 @@ export class PacingAnalyzer {
       if (localVeoPath) {
         try {
           await fs.promises.unlink(localVeoPath);
-          console.log(`[PacingAnalyzer] Cleaned up ${localVeoPath}`);
+          logger.debug("PacingAnalyzer", "Cleaned up temp file");
         } catch (err) {
-          console.error(`[PacingAnalyzer] Failed to clean up ${localVeoPath}:`, err);
+          logger.error("PacingAnalyzer", "Failed to clean up temp file", err as Error);
         }
       }
       if (localUserPath) {
         try {
           await fs.promises.unlink(localUserPath);
-          console.log(`[PacingAnalyzer] Cleaned up ${localUserPath}`);
+          logger.debug("PacingAnalyzer", "Cleaned up temp file");
         } catch (err) {
-          console.error(`[PacingAnalyzer] Failed to clean up ${localUserPath}:`, err);
+          logger.error("PacingAnalyzer", "Failed to clean up temp file", err as Error);
         }
       }
     }

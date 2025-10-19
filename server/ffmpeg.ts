@@ -3,6 +3,7 @@ import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import ffprobeInstaller from "@ffprobe-installer/ffprobe";
 import { promises as fs } from "fs";
 import path from "path";
+import { logger } from "./logger";
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 ffmpeg.setFfprobePath(ffprobeInstaller.path);
@@ -110,7 +111,7 @@ export class FFmpegService {
         ])
         .output(outputPath)
         .on('end', () => {
-          console.log(`[FFmpeg] Re-encoded video for browser compatibility: ${outputPath}`);
+          logger.info("FFmpeg", "Re-encoded for browser compatibility");
           resolve();
         })
         .on('error', (err: any) => {

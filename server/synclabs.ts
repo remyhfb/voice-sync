@@ -1,4 +1,5 @@
 import https from "https";
+import { logger } from "./logger";
 
 export class SyncLabsService {
   private apiKey: string;
@@ -45,17 +46,15 @@ export class SyncLabsService {
     const model = options.model || "lipsync-2-pro";
     const temperature = options.temperature ?? 0.6; // Slightly expressive for natural speech
 
-    console.log(`[SyncLabs] Creating lip-sync job with model: ${model}, temperature: ${temperature}`);
-    console.log(`[SyncLabs] Video: ${videoUrl}`);
-    console.log(`[SyncLabs] Audio: ${audioUrl}`);
+    logger.info("SyncLabs", "Creating lip-sync job", { model, temperature });
 
     // Step 1: Create job
     const jobId = await this.createJob(videoUrl, audioUrl, model, temperature, options.webhookUrl);
-    console.log(`[SyncLabs] Job created: ${jobId}`);
+    logger.info("SyncLabs", "Job created", { jobId });
 
     // Step 2: Poll for completion
     const result = await this.pollJob(jobId);
-    console.log(`[SyncLabs] Lip-sync completed: ${result.videoUrl}`);
+    logger.info("SyncLabs", "Lip-sync completed");
 
     return result;
   }
@@ -124,15 +123,19 @@ export class SyncLabsService {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const status = await this.getJobStatus(jobId);
 
-      const stepInfo = status.step ? ` (${status.step})` : '';
-      console.log(`[SyncLabs] Job ${jobId} status: ${status.status}${stepInfo} (attempt ${attempt + 1}/${maxAttempts})`);
+      logger.debug("SyncLabs", "Job status", { 
+        jobId, 
+        status: status.status, 
+        step: status.step,
+        attempt: attempt + 1 
+      });
 
       if (status.status === "completed") {
         if (!status.videoUrl) {
           throw new Error("Job completed but no video URL returned");
         }
         const creditsUsed = status.creditsDeducted || 0;
-        console.log(`[SyncLabs] Job completed successfully. Credits used: ${creditsUsed}`);
+        logger.info("SyncLabs", "Job completed", { creditsUsed });
         return {
           videoUrl: status.videoUrl,
           creditsDeducted: creditsUsed,
@@ -141,7 +144,7 @@ export class SyncLabsService {
 
       if (status.status === "failed") {
         const errorDetails = status.errorMessage || "Unknown error";
-        console.error(`[SyncLabs] Job failed: ${errorDetails}`);
+        logger.error("SyncLabs", "Job failed", new Error(errorDetails));
         throw new Error(`Sync Labs job failed: ${errorDetails}`);
       }
 
@@ -180,7 +183,7 @@ export class SyncLabsService {
           if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
             try {
               const data = JSON.parse(body);
-              console.log(`[SyncLabs] Raw API response:`, JSON.stringify(data, null, 2));
+              logger.debug("SyncLabs", "API response received");
               // Normalize response format
               const normalized = {
                 id: data.id,

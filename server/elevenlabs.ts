@@ -1,5 +1,6 @@
 import fs from "fs";
 import FormData from "form-data";
+import { logger } from "./logger";
 
 const ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1";
 

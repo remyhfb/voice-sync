@@ -8,6 +8,7 @@ import { FFmpegService } from "./ffmpeg";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { SyncLabsService } from "./synclabs";
 import { SegmentAligner } from "./segment-aligner";
+import { logger } from "./logger";
 
 const upload = multer({ dest: "/tmp/uploads/" });
 const ffmpegService = new FFmpegService();
@@ -25,7 +26,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       objectStorageService.downloadObject(file, res);
     } catch (error) {
-      console.error("Error searching for public object:", error);
+      logger.error("ObjectStorage", "Error searching for public object", error as Error);
       return res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -63,7 +64,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         objectFile
           .createReadStream({ start, end })
           .on("error", (err) => {
-            console.error("Error streaming file range:", err);
+            logger.error("ObjectStorage", "Error streaming file range", err as Error);
             res.status(500).send("Error streaming file");
           })
           .pipe(res);
@@ -75,7 +76,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         objectStorageService.downloadObject(objectFile, res);
       }
     } catch (error) {
-      console.error("Error accessing object:", error);
+      logger.error("ObjectStorage", "Error accessing object", error as Error);
       if (error instanceof ObjectNotFoundError) {
         return res.sendStatus(404);
       }
@@ -88,7 +89,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const uploadURL = await objectStorageService.getObjectEntityUploadURL();
       res.json({ uploadURL });
     } catch (error) {
-      console.error("Error generating upload URL:", error);
+      logger.error("ObjectStorage", "Error generating upload URL", error as Error);
       res.status(500).json({ error: "Failed to generate upload URL" });
     }
   });
@@ -134,19 +135,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         try {
           // Step 1: Extract VEO audio (0-10%)
-          console.log(`[JOB ${job.id}] [LIPSYNC] Extracting VEO audio for transcription`);
+          logger.info(`Job:${job.id}`, "Extracting VEO audio for transcription");
           await ffmpegService.extractAudio(videoFile.path, veoAudioPath);
           await storage.updateProcessingJob(job.id, { progress: 10 });
 
           // Step 2: Clean user audio with ElevenLabs (10-20%)
-          console.log(`[JOB ${job.id}] [LIPSYNC] Cleaning user audio (noise reduction + mic enhancement)`);
+          logger.info(`Job:${job.id}`, "Cleaning user audio with ElevenLabs");
           const elevenlabs = new ElevenLabsService();
           const cleanedBuffer = await elevenlabs.isolateVoice(audioFile.path);
           await fs.writeFile(cleanedUserAudioPath, cleanedBuffer);
           await storage.updateProcessingJob(job.id, { progress: 15 });
 
           // Step 2.5: Trim silence from both audio files (15-20%)
-          console.log(`[JOB ${job.id}] [LIPSYNC] Trimming silence from audio files`);
+          logger.info(`Job:${job.id}`, "Trimming silence from audio files");
           const trimmedUserAudioPath = `/tmp/uploads/${job.id}_trimmed_user.mp3`;
           const trimmedVeoAudioPath = `/tmp/uploads/${job.id}_trimmed_veo.mp3`;
           
@@ -155,8 +156,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ffmpegService.trimSilence(veoAudioPath, trimmedVeoAudioPath)
           ]);
 
-          console.log(`[JOB ${job.id}] [LIPSYNC] User audio trimmed: ${userTrimResult.startTrimmed.toFixed(2)}s start, ${userTrimResult.endTrimmed.toFixed(2)}s end`);
-          console.log(`[JOB ${job.id}] [LIPSYNC] VEO audio trimmed: ${veoTrimResult.startTrimmed.toFixed(2)}s start, ${veoTrimResult.endTrimmed.toFixed(2)}s end`);
+          logger.info(`Job:${job.id}`, "Silence trimmed from user audio", { 
+            startTrimmed: userTrimResult.startTrimmed, 
+            endTrimmed: userTrimResult.endTrimmed 
+          });
+          logger.info(`Job:${job.id}`, "Silence trimmed from VEO audio", { 
+            startTrimmed: veoTrimResult.startTrimmed, 
+            endTrimmed: veoTrimResult.endTrimmed 
+          });
           
           await storage.updateProcessingJob(job.id, { 
             progress: 20,
@@ -170,7 +177,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
 
           // Step 3: Transcribe both with Whisper (20-40%)
-          console.log(`[JOB ${job.id}] [LIPSYNC] Transcribing VEO video and user audio (trimmed versions)`);
+          logger.info(`Job:${job.id}`, "Transcribing audio with Whisper");
           const aligner = new SegmentAligner();
           
           const [veoSegments, userSegments] = await Promise.all([
@@ -178,17 +185,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             aligner.extractSegments(trimmedUserAudioPath)
           ]);
           
-          console.log(`[JOB ${job.id}] [LIPSYNC] VEO segments: ${veoSegments.length}, User segments: ${userSegments.length}`);
+          logger.info(`Job:${job.id}`, "Transcription complete", { 
+            veoSegments: veoSegments.length, 
+            userSegments: userSegments.length 
+          });
           await storage.updateProcessingJob(job.id, { progress: 40 });
 
           // Step 4: Align segments and calculate time-stretch ratios (40-45%)
-          console.log(`[JOB ${job.id}] [LIPSYNC] Aligning segments and calculating time-stretch ratios`);
+          logger.info(`Job:${job.id}`, "Aligning segments and calculating time-stretch ratios");
           const alignments = await aligner.alignSegments(veoSegments, userSegments);
           
           await storage.updateProcessingJob(job.id, { progress: 45 });
 
           // Step 5: Time-stretch video segments (45-70%)
-          console.log(`[JOB ${job.id}] [LIPSYNC] Time-stretching video to match user timing`);
+          logger.info(`Job:${job.id}`, "Time-stretching video to match user timing");
           
           for (let i = 0; i < alignments.length; i++) {
             const alignment = alignments[i];
@@ -218,12 +228,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           // Concatenate time-stretched segments
-          console.log(`[JOB ${job.id}] [LIPSYNC] Concatenating ${segmentPaths.length} time-stretched segments`);
+          logger.info(`Job:${job.id}`, "Concatenating time-stretched segments", { count: segmentPaths.length });
           await ffmpegService.concatenateVideoSegments(segmentPaths, timeStretchedVideoPath);
           await storage.updateProcessingJob(job.id, { progress: 70 });
 
           // Step 6: Apply Sync Labs lip-sync (70-90%)
-          console.log(`[JOB ${job.id}] [LIPSYNC] Uploading video and audio to GCS for Sync Labs`);
+          logger.info(`Job:${job.id}`, "Uploading video and audio to GCS for Sync Labs");
           const objectStorageService = new ObjectStorageService();
           
           // Upload time-stretched video
@@ -281,7 +291,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             convertedAudioPath
           });
           
-          console.log(`[JOB ${job.id}] [LIPSYNC] Applying lip-sync with Sync Labs`);
+          logger.info(`Job:${job.id}`, "Applying lip-sync with Sync Labs");
           const synclabs = new SyncLabsService();
           const syncLabsResult = await synclabs.lipSync(
             videoReadUrl,
@@ -289,8 +299,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             { model: "lipsync-2-pro" } // Using latest premium model for best quality
           );
           
-          console.log(`[JOB ${job.id}] [LIPSYNC] Sync Labs completed. Credits used: ${syncLabsResult.creditsDeducted}`);
-          console.log(`[JOB ${job.id}] [LIPSYNC] Downloading lip-synced video from ${syncLabsResult.videoUrl}`);
+          logger.info(`Job:${job.id}`, "Sync Labs completed", { creditsUsed: syncLabsResult.creditsDeducted });
+          logger.debug(`Job:${job.id}`, "Downloading lip-synced video");
           const lipsyncedResponse = await fetch(syncLabsResult.videoUrl);
           if (!lipsyncedResponse.ok) {
             throw new Error(`Failed to download lip-synced video: ${lipsyncedResponse.statusText}`);
@@ -300,14 +310,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await fs.writeFile(rawLipsyncedPath, lipsyncedBuffer);
           
           // Re-encode for browser compatibility (H.264/AAC)
-          console.log(`[JOB ${job.id}] [LIPSYNC] Re-encoding for browser compatibility`);
+          logger.info(`Job:${job.id}`, "Re-encoding for browser compatibility");
           await ffmpegService.reencodeForBrowser(rawLipsyncedPath, lipsyncedVideoPath);
           await fs.unlink(rawLipsyncedPath).catch(() => {});
           
           await storage.updateProcessingJob(job.id, { progress: 90 });
 
           // Step 7: Upload final video (90-100%)
-          console.log(`[JOB ${job.id}] [LIPSYNC] Uploading final video`);
+          logger.info(`Job:${job.id}`, "Uploading final video");
           const finalVideoUploadUrl = await objectStorageService.getObjectEntityUploadURL();
           const finalBuffer = await fs.readFile(lipsyncedVideoPath);
           const finalStats = await fs.stat(lipsyncedVideoPath);
@@ -342,10 +352,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } as any, // metadata is JSONB, allows dynamic properties
           });
 
-          console.log(`[JOB ${job.id}] [LIPSYNC] Processing completed successfully`);
+          logger.info(`Job:${job.id}`, "Processing completed successfully");
         } catch (error: any) {
-          console.error(`[JOB ${job.id}] [LIPSYNC] Error:`, error.message);
-          console.error(`[JOB ${job.id}] [LIPSYNC] Stack:`, error.stack);
+          logger.error(`Job:${job.id}`, "Processing failed", error);
           
           // Get latest job data to preserve alignment report even on failure
           const latestJob = await storage.getProcessingJob(job.id);
@@ -374,7 +383,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       })();
     } catch (error: any) {
-      console.error("Error creating lipsync job:", error);
+      logger.error("Routes", "Error creating lipsync job", error);
       res.status(500).json({ error: error.message || "Failed to create lipsync job" });
     }
   });
@@ -384,7 +393,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const jobs = await storage.getAllProcessingJobs();
       res.json(jobs);
     } catch (error) {
-      console.error("Error fetching jobs:", error);
+      logger.error("Routes", "Error fetching jobs", error as Error);
       res.status(500).json({ error: "Failed to fetch jobs" });
     }
   });
@@ -397,7 +406,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(job);
     } catch (error) {
-      console.error("Error fetching job:", error);
+      logger.error("Routes", "Error fetching job", error as Error);
       res.status(500).json({ error: "Failed to fetch job" });
     }
   });
@@ -431,7 +440,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const { PacingAnalyzer } = await import("./pacing-analyzer");
           const analyzer = new PacingAnalyzer();
 
-          console.log(`[JOB ${jobId}] [PACING] Starting pacing analysis`);
+          logger.info(`Job:${jobId}`, "Starting pacing analysis");
           
           // TypeScript: We already checked these exist above, so use non-null assertions
           const report = await analyzer.analyzePacing(
@@ -471,14 +480,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           });
 
-          console.log(`[JOB ${jobId}] [PACING] Analysis complete`);
+          logger.info(`Job:${jobId}`, "Pacing analysis complete");
         } catch (error: any) {
-          console.error(`[JOB ${jobId}] [PACING] Error:`, error.message);
-          console.error(`[JOB ${jobId}] [PACING] Stack:`, error.stack);
+          logger.error(`Job:${jobId}`, "Pacing analysis failed", error);
         }
       })();
     } catch (error: any) {
-      console.error("Error starting pacing analysis:", error);
+      logger.error("Routes", "Error starting pacing analysis", error);
       res.status(500).json({ error: error.message || "Failed to start pacing analysis" });
     }
   });
