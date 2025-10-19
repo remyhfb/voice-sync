@@ -34,6 +34,26 @@ export const processingJobs = pgTable("processing_jobs", {
         trimmedDuration: number;
       };
     };
+    pacingReport?: {
+      summary: {
+        overallRatio: number;
+        totalSegments: number;
+        segmentsNeedingAdjustment: number;
+        averageDeviation: number;
+        overallPacing: "perfect" | "slightly_fast" | "fast" | "critically_fast" | "slightly_slow" | "slow" | "critically_slow";
+      };
+      segments: Array<{
+        segmentIndex: number;
+        veoText: string;
+        userText: string;
+        veoSpeechDuration: number;
+        userSpeechDuration: number;
+        pacingRatio: number;
+        pacingLabel: "perfect" | "slightly_fast" | "fast" | "critically_fast" | "slightly_slow" | "slow" | "critically_slow";
+        guidance: string;
+        wordCount: number;
+      }>;
+    };
     errorMessage?: string;
     errorStack?: string;
   }>(),
