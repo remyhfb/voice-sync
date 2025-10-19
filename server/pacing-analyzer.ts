@@ -4,7 +4,7 @@ import path from "path";
 import { ObjectStorageService } from "./objectStorage";
 
 // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY_PACING });
 
 export interface WordTiming {
   word: string;
