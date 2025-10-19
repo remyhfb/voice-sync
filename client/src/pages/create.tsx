@@ -212,6 +212,12 @@ export default function CreatePage() {
             <h2 className="text-xl font-semibold mb-4">
               Step 1: Upload VEO Video
             </h2>
+            <Alert className="mb-4" data-testid="alert-veo-requirements">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Important:</strong> Remove any weird or unintended footage that your AI video generator added on its own (grunts, groans, odd expressions, etc.). Our software detects natural patterns, and AI-generated artifacts will result in poor output.
+              </AlertDescription>
+            </Alert>
             <FileUploadZone
               onFilesSelected={handleVideoUpload}
               accept="video/*"
