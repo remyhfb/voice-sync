@@ -38,7 +38,7 @@ export class MemStorage implements IStorage {
       extractedAudioPath: insertJob.extractedAudioPath ?? null,
       convertedAudioPath: insertJob.convertedAudioPath ?? null,
       mergedVideoPath: insertJob.mergedVideoPath ?? null,
-      metadata: insertJob.metadata ?? null,
+      metadata: (insertJob.metadata ?? null) as any, // JSONB allows any valid JSON structure
       id,
       createdAt: new Date(),
       updatedAt: new Date(),
