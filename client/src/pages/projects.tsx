@@ -17,15 +17,18 @@ export default function ProjectsPage() {
   });
   const [expandedVideo, setExpandedVideo] = useState<string | null>(null);
   const [analyzingPacing, setAnalyzingPacing] = useState<string | null>(null);
+  const [videoErrors, setVideoErrors] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   const handleVideoError = (projectId: string) => {
-    toast({
-      variant: "destructive",
-      title: "Video playback error",
-      description: "Unable to load the video. The file may be corrupted or missing. Try downloading it instead.",
-    });
-    setExpandedVideo(null);
+    if (!videoErrors.has(projectId)) {
+      toast({
+        variant: "destructive",
+        title: "Video playback error",
+        description: "Unable to load the video. The file may be corrupted or missing. Try downloading it instead.",
+      });
+      setVideoErrors(new Set([...Array.from(videoErrors), projectId]));
+    }
   };
 
   const formatDuration = (seconds: number) => {
@@ -223,18 +226,34 @@ export default function ProjectsPage() {
                 <>
                   <Card>
                     <CardContent className="p-0">
-                      <AspectRatio ratio={16/9}>
-                        <video
-                          key={project.mergedVideoPath}
-                          controls
-                          className="w-full h-full rounded-lg"
-                          onError={() => handleVideoError(project.id)}
-                          data-testid={`video-player-${project.id}`}
-                        >
-                          <source src={project.mergedVideoPath} type="video/mp4" />
-                          Your browser does not support the video tag.
-                        </video>
-                      </AspectRatio>
+                      {videoErrors.has(project.id) ? (
+                        <div className="flex flex-col items-center justify-center py-12 px-4 text-center bg-muted/50 rounded-lg">
+                          <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+                          <h3 className="text-lg font-semibold mb-2">Video Preview Unavailable</h3>
+                          <p className="text-sm text-muted-foreground mb-4">
+                            The video file cannot be displayed in the browser, but you can still download it.
+                          </p>
+                          <Button size="sm" asChild>
+                            <a href={project.mergedVideoPath} download>
+                              <Download className="h-4 w-4 mr-2" />
+                              Download Video
+                            </a>
+                          </Button>
+                        </div>
+                      ) : (
+                        <AspectRatio ratio={16/9}>
+                          <video
+                            key={project.mergedVideoPath}
+                            controls
+                            className="w-full h-full rounded-lg"
+                            onError={() => handleVideoError(project.id)}
+                            data-testid={`video-player-${project.id}`}
+                          >
+                            <source src={project.mergedVideoPath} type="video/mp4" />
+                            Your browser does not support the video tag.
+                          </video>
+                        </AspectRatio>
+                      )}
                     </CardContent>
                   </Card>
 
