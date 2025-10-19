@@ -252,9 +252,6 @@ export default function ProjectsPage() {
                             <source src={project.mergedVideoPath} type="video/mp4" />
                             Your browser does not support the video tag.
                           </video>
-                          <div className="mt-2 text-xs text-muted-foreground font-mono truncate">
-                            {project.mergedVideoPath}
-                          </div>
                         </AspectRatio>
                       )}
                     </CardContent>

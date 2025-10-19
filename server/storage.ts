@@ -1,7 +1,7 @@
 import { type ProcessingJob, type InsertProcessingJob, processingJobs } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
   getProcessingJob(id: string): Promise<ProcessingJob | undefined>;
@@ -68,7 +68,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllProcessingJobs(): Promise<ProcessingJob[]> {
-    return db.select().from(processingJobs);
+    return db.select().from(processingJobs).orderBy(desc(processingJobs.createdAt));
   }
 
   async createProcessingJob(insertJob: InsertProcessingJob): Promise<ProcessingJob> {
