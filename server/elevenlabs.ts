@@ -346,4 +346,60 @@ export class ElevenLabsService {
       );
     });
   }
+
+  async generateSoundEffect(
+    prompt: string,
+    options: {
+      durationSeconds?: number;
+      promptInfluence?: number;
+    } = {}
+  ): Promise<Buffer> {
+    if (!this.apiKey) {
+      throw new Error("ElevenLabs API key not configured");
+    }
+
+    const durationSeconds = options.durationSeconds || 10;
+    const promptInfluence = options.promptInfluence ?? 0.3;
+
+    logger.info("ElevenLabs", "Generating sound effect with v2 model", {
+      prompt,
+      duration: durationSeconds,
+      influence: promptInfluence
+    });
+
+    try {
+      const response = await fetch(
+        `${ELEVENLABS_API_BASE}/text-to-sound-effects`,
+        {
+          method: "POST",
+          headers: {
+            "xi-api-key": this.apiKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            text: prompt,
+            duration_seconds: durationSeconds,
+            prompt_influence: promptInfluence,
+            model_id: "eleven_text_to_sound_v2" // ***V2 MODEL*** as requested
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        logger.error("ElevenLabs", "Sound effect generation failed", new Error(errorText));
+        throw new Error(`ElevenLabs Sound Effect API error: ${response.status} - ${errorText}`);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      logger.info("ElevenLabs", "Sound effect generation complete", { 
+        bytes: arrayBuffer.byteLength,
+        prompt
+      });
+      return Buffer.from(arrayBuffer);
+    } catch (error) {
+      logger.error("ElevenLabs", "Sound effect generation exception", error as Error);
+      throw error;
+    }
+  }
 }
