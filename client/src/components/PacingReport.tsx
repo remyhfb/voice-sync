@@ -37,6 +37,11 @@ interface PacingReportProps {
 }
 
 export function PacingReport({ report }: PacingReportProps) {
+  // Calculate total delta (sum of all phrase deltas)
+  const totalDelta = report.phraseComparisons.reduce((sum, comparison) => {
+    return sum + comparison.timeDelta;
+  }, 0);
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = (seconds % 60).toFixed(1);
@@ -104,6 +109,26 @@ export function PacingReport({ report }: PacingReportProps) {
       </CardHeader>
 
       <CardContent className="p-6 space-y-6">
+        {/* Total Delta - Primary metric */}
+        <div className="bg-primary/5 border-2 border-primary/20 rounded-lg p-6">
+          <div className="text-center">
+            <div className="text-sm font-medium text-muted-foreground mb-2">
+              Total Delta (VEO vs Your Audio)
+            </div>
+            <div className="text-4xl font-bold font-mono">
+              {totalDelta >= 0 ? "+" : ""}
+              {totalDelta.toFixed(2)}s
+            </div>
+            <div className="text-xs text-muted-foreground mt-2">
+              {totalDelta > 0 
+                ? "Your audio is longer than VEO" 
+                : totalDelta < 0 
+                  ? "Your audio is shorter than VEO"
+                  : "Durations match perfectly"}
+            </div>
+          </div>
+        </div>
+
         {/* Summary Stats */}
         <div className="grid grid-cols-3 gap-4">
           <div className="bg-muted/50 rounded-lg p-4">
