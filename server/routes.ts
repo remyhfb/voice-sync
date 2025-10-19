@@ -344,6 +344,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Standalone pacing analysis using VAD (Voice Activity Detection)
+  app.post("/api/jobs/:id/analyze-pacing", upload.fields([
+    { name: "veoVideo", maxCount: 1 },
+    { name: "userAudio", maxCount: 1 }
+  ]), async (req, res) => {
+    try {
+      const jobId = req.params.id;
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      const veoVideoFile = files.veoVideo?.[0];
+      const userAudioFile = files.userAudio?.[0];
+
+      if (!veoVideoFile || !userAudioFile) {
+        return res.status(400).json({ error: "Both VEO video and user audio required" });
+      }
+
+      // Extract audio from VEO video
+      const veoAudioPath = `/tmp/vad_veo_${Date.now()}.mp3`;
+      await ffmpegService.extractAudio(veoVideoFile.path, veoAudioPath);
+
+      // Run VAD analysis using Python service
+      const { exec } = await import("child_process");
+      const { promisify } = await import("util");
+      const execAsync = promisify(exec);
+
+      console.log(`[PACING] Running VAD analysis for job ${jobId}`);
+      const pythonResult = await execAsync(
+        `python3 server/vad-service.py "${veoAudioPath}" "${userAudioFile.path}"`
+      );
+
+      const vadResult = JSON.parse(pythonResult.stdout);
+
+      // Cleanup temp files
+      await fs.unlink(veoVideoFile.path).catch(() => {});
+      await fs.unlink(userAudioFile.path).catch(() => {});
+      await fs.unlink(veoAudioPath).catch(() => {});
+
+      if (!vadResult.success) {
+        return res.status(500).json({ error: vadResult.error || "VAD analysis failed" });
+      }
+
+      // Save pacing report to job metadata
+      const job = await storage.getProcessingJob(jobId);
+      if (job) {
+        await storage.updateProcessingJob(jobId, {
+          metadata: {
+            ...job.metadata,
+            pacingAnalysis: {
+              veoSpeechDuration: vadResult.veo_speech_duration,
+              userSpeechDuration: vadResult.user_speech_duration,
+              ratio: vadResult.ratio,
+              classification: vadResult.classification,
+              analyzedAt: new Date().toISOString()
+            }
+          }
+        });
+      }
+
+      res.json(vadResult);
+    } catch (error: any) {
+      console.error("Error running pacing analysis:", error);
+      res.status(500).json({ error: error.message || "Failed to analyze pacing" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
