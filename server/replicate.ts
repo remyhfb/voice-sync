@@ -42,7 +42,8 @@ export class ReplicateService {
         input: {
           audio: audioDataUri,
           language: "en",
-          batch_size: 24
+          batch_size: 24,
+          align_output: true  // CRITICAL: Enable word-level timestamps
         }
       }
     ) as any;
