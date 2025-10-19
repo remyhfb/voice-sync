@@ -1,0 +1,10 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+panns-inference==0.1.1
+librosa==0.10.1
+numpy==1.24.3
+soundfile==0.12.1
+python-multipart==0.0.6
+torch==2.1.0
+torchvision==0.16.0
+torchaudio==2.1.0
