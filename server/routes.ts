@@ -2,38 +2,15 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import { promises as fs } from "fs";
-import path from "path";
-import archiver from "archiver";
 import { storage } from "./storage";
 import { ElevenLabsService } from "./elevenlabs";
 import { FFmpegService } from "./ffmpeg";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
-import { ReplicateService } from "./replicate";
 import { SyncLabsService } from "./synclabs";
 import { SegmentAligner } from "./segment-aligner";
 
 const upload = multer({ dest: "/tmp/uploads/" });
 const ffmpegService = new FFmpegService();
-
-async function createZipFromFiles(files: string[], outputPath: string): Promise<void> {
-  const { createWriteStream } = await import('fs');
-  const output = createWriteStream(outputPath);
-  const archive = archiver('zip', { zlib: { level: 9 } });
-  
-  return new Promise((resolve, reject) => {
-    output.on('close', () => resolve());
-    archive.on('error', (err) => reject(err));
-    
-    archive.pipe(output);
-    
-    files.forEach((file, index) => {
-      const ext = path.extname(file);
-      archive.file(file, { name: `sample_${index}${ext}` });
-    });
-    
-    archive.finalize();
-  });
-}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const objectStorageService = new ObjectStorageService();

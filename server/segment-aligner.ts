@@ -248,7 +248,7 @@ export class SegmentAligner {
     const set2 = new Set(words2);
     let overlap = 0;
 
-    for (const word of set1) {
+    for (const word of Array.from(set1)) {
       if (set2.has(word)) overlap++;
     }
 
