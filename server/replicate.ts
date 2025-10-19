@@ -40,7 +40,7 @@ export class ReplicateService {
       {
         input: {
           audio: audioDataUri,
-          model: "large",
+          model: "large-v2",
           language: "en",
           translate: false,
           temperature: 0,
