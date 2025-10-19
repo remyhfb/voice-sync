@@ -369,7 +369,7 @@ export class ElevenLabsService {
 
     try {
       const response = await fetch(
-        `${ELEVENLABS_API_BASE}/text-to-sound-effects`,
+        `${ELEVENLABS_API_BASE}/sound-generation`,
         {
           method: "POST",
           headers: {
