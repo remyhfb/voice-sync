@@ -133,6 +133,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const lipsyncedVideoPath = `/tmp/uploads/${job.id}_lipsync.mp4`;
         const segmentPaths: string[] = [];
         
+        // Create mutable metadata object to avoid closure issues
+        let currentMetadata = { ...job.metadata };
+        
         try {
           // Step 0.5: Upload original VEO video to object storage for future sound regeneration
           logger.info(`Job:${job.id}`, "Uploading original VEO video to object storage");
@@ -154,12 +157,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const originalObjectId = originalUrlParts[originalUrlParts.length - 1];
           const originalVideoPath = `/objects/uploads/${originalObjectId}`;
 
+          // Update mutable metadata with spread to ensure type safety
+          currentMetadata = {
+            ...currentMetadata,
+            originalVideoPath
+          };
+          
           // Store original video path in metadata
           await storage.updateProcessingJob(job.id, {
-            metadata: {
-              ...job.metadata,
-              originalVideoPath,
-            }
+            metadata: currentMetadata
           });
 
           // Step 1: Extract VEO audio (0-10%)
@@ -193,15 +199,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             endTrimmed: veoTrimResult.endTrimmed 
           });
           
+          // Update mutable metadata with spread to ensure type safety
+          currentMetadata = {
+            ...currentMetadata,
+            silenceTrimmed: {
+              user: userTrimResult,
+              veo: veoTrimResult
+            }
+          };
+          
           await storage.updateProcessingJob(job.id, { 
             progress: 20,
-            metadata: {
-              ...job.metadata,
-              silenceTrimmed: {
-                user: userTrimResult,
-                veo: veoTrimResult
-              }
-            }
+            metadata: currentMetadata
           });
 
           // Step 3: Transcribe both with Whisper (20-40%)
@@ -363,37 +372,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const objectId = urlParts[urlParts.length - 1];
           const finalVideoPath = `/objects/uploads/${objectId}`;
 
-          // Get latest job data to preserve alignment report and other metadata
+          // Update mutable metadata with final info using spread
+          currentMetadata = {
+            ...currentMetadata,
+            syncLabsCredits: syncLabsResult.creditsDeducted
+          };
+          
+          // Get latest job data to preserve alignment report if it was added by parallel process
           const latestJob = await storage.getProcessingJob(job.id);
           if (!latestJob) {
             throw new Error("Job not found during final update");
           }
+
+          // Merge current metadata with any data added by parallel processes (e.g., alignment report)
+          const finalMetadata = {
+            ...currentMetadata,
+            ...(latestJob.metadata?.pacingAnalysis ? { pacingAnalysis: latestJob.metadata.pacingAnalysis } : {})
+          };
 
           await storage.updateProcessingJob(job.id, {
             videoPath: null,
             mergedVideoPath: finalVideoPath,
             status: "completed",
             progress: 100,
-            metadata: {
-              ...latestJob.metadata,
-              syncLabsCredits: syncLabsResult.creditsDeducted,
-            } as any, // metadata is JSONB, allows dynamic properties
+            metadata: finalMetadata as any, // metadata is JSONB, allows dynamic properties
           });
 
           logger.info(`Job:${job.id}`, "Processing completed successfully");
         } catch (error: any) {
           logger.error(`Job:${job.id}`, "Processing failed", error);
           
+          // Update mutable metadata with error info using spread
+          currentMetadata = {
+            ...currentMetadata,
+            errorMessage: error.message,
+            errorStack: error.stack?.substring(0, 500)
+          };
+          
           // Get latest job data to preserve alignment report even on failure
           const latestJob = await storage.getProcessingJob(job.id);
+          
+          // Merge current metadata with any data added by parallel processes
+          const finalMetadata = {
+            ...currentMetadata,
+            ...(latestJob?.metadata?.pacingAnalysis ? { pacingAnalysis: latestJob.metadata.pacingAnalysis } : {})
+          };
+          
           await storage.updateProcessingJob(job.id, {
             status: "failed",
             videoPath: null,
-            metadata: {
-              ...(latestJob?.metadata || job.metadata),
-              errorMessage: error.message,
-              errorStack: error.stack?.substring(0, 500),
-            },
+            metadata: finalMetadata,
           });
         } finally {
           // Cleanup temp files
@@ -501,9 +529,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             recommendations: report.recommendations
           };
 
+          // Re-fetch latest job to preserve all metadata
+          const latestJob = await storage.getProcessingJob(jobId);
           await storage.updateProcessingJob(jobId, {
             metadata: {
-              ...job.metadata,
+              ...(latestJob?.metadata || {}),
               pacingAnalysis: simplifiedReport
             }
           });
@@ -550,10 +580,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           logger.info(`Job:${jobId}`, "Starting sound design regeneration");
           
+          // Re-fetch latest job to preserve all metadata
+          let latestJob = await storage.getProcessingJob(jobId);
+          
           // Update status to processing
           await storage.updateProcessingJob(jobId, {
             metadata: {
-              ...job.metadata,
+              ...(latestJob?.metadata || {}),
               soundDesignAnalysis: {
                 status: "processing",
                 detectedSounds: [],
@@ -580,10 +613,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             '/tmp/sound-design'
           );
 
+          // Re-fetch latest job to preserve all metadata
+          latestJob = await storage.getProcessingJob(jobId);
+          
           // Store results in metadata
           await storage.updateProcessingJob(jobId, {
             metadata: {
-              ...job.metadata,
+              ...(latestJob?.metadata || {}),
               soundDesignAnalysis: {
                 status: "completed" as const,
                 detectedSounds: result.detectedSounds as Array<{
@@ -606,10 +642,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch (error: any) {
           logger.error(`Job:${jobId}`, "Sound design regeneration failed", error);
           
+          // Re-fetch latest job to preserve all metadata
+          const latestJobError = await storage.getProcessingJob(jobId);
+          
           // Update with error status
           await storage.updateProcessingJob(jobId, {
             metadata: {
-              ...job.metadata,
+              ...(latestJobError?.metadata || {}),
               soundDesignAnalysis: {
                 status: "failed" as const,
                 detectedSounds: [],

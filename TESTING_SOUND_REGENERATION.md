@@ -1,15 +1,20 @@
 # Testing Sound Design Regeneration Locally
 
-## ⚠️ Important: Recent Fix Applied!
+## 🎉 Metadata Clobbering Bug FIXED!
 
-The 404 error you experienced has been fixed! The original VEO video is now properly stored in object storage before processing starts, so sound regeneration can access it.
+The 400 error has been resolved! The issue was that the `originalVideoPath` was being saved initially, but then **overwritten** by subsequent metadata updates during processing. I've refactored all metadata updates to use object spread operators instead of mutation to preserve all fields.
+
+## ✅ What Was Fixed:
+1. **Metadata persistence**: All metadata updates now use `currentMetadata = { ...currentMetadata, newField }` pattern
+2. **Original video storage**: VEO video is uploaded to object storage at the start of processing
+3. **Type safety**: Using object spread ensures TypeScript properly handles all metadata fields
 
 ## Quick Start
 
 ### 1. Start the Main Application (Already Running ✅)
 Your main VoiceSwap application is already running on port 5000.
 
-### 2. Start the Python Sound Detection Service
+### 2. Start the Python Sound Detection Service (Optional for full testing)
 
 Open a **new terminal/shell** and run:
 
@@ -29,9 +34,18 @@ curl http://localhost:8001/health
 
 Expected response: `{"status":"healthy"}`
 
-### 3. Start a New Lip-Sync Job
+### 3. Create a NEW Lip-Sync Job
 
-**Important:** If you already have a completed job from before the fix, you'll need to create a **new job** for sound regeneration to work. Jobs created before the fix don't have the original video stored.
+**CRITICAL:** You **MUST** create a **brand new job** to test sound regeneration. The fix was just applied, so:
+- ✅ **New jobs** (created after the fix) → Will work with sound regeneration
+- ❌ **Old jobs** (created before the fix) → Missing originalVideoPath, will fail with 400 error
+
+**How to create a new job:**
+1. Go to http://localhost:5000
+2. Click **"Create"** → **"Create Another"**
+3. Upload your VEO video + audio files
+4. Wait for lip-sync to complete (status: "completed")
+5. Then click **"Regenerate Sound Design (Beta)"**
 
 ---
 
