@@ -361,28 +361,36 @@ export class ElevenLabsService {
     const durationSeconds = options.durationSeconds || 10;
     const promptInfluence = options.promptInfluence ?? 0.3;
 
-    logger.info("ElevenLabs", "Generating sound effect with v2 model", {
-      prompt,
-      duration: durationSeconds,
-      influence: promptInfluence
+    const requestUrl = `${ELEVENLABS_API_BASE}/sound-generation`;
+    const requestBody = {
+      text: prompt,
+      duration_seconds: durationSeconds,
+      prompt_influence: promptInfluence
+    };
+
+    logger.info("ElevenLabs", "Generating sound effect", {
+      url: requestUrl,
+      body: requestBody
     });
 
     try {
       const response = await fetch(
-        `${ELEVENLABS_API_BASE}/sound-generation`,
+        requestUrl,
         {
           method: "POST",
           headers: {
             "xi-api-key": this.apiKey,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            text: prompt,
-            duration_seconds: durationSeconds,
-            prompt_influence: promptInfluence
-          }),
+          body: JSON.stringify(requestBody),
         },
       );
+
+      logger.info("ElevenLabs", "Sound effect API response", {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      });
 
       if (!response.ok) {
         const errorText = await response.text();
