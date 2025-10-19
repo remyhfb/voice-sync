@@ -58,6 +58,7 @@ export class SegmentAligner {
 
   /**
    * Transcribe audio and extract word-level segments with pauses
+   * Uses word-level timestamps to calculate accurate speech duration (excludes leading/trailing silence)
    */
   async extractSegments(audioPath: string): Promise<TimeSegment[]> {
     const transcriptData = await this.replicate.transcribeWithTimestamps(audioPath);
@@ -78,12 +79,23 @@ export class SegmentAligner {
     for (let i = 0; i < transcriptData.segments.length; i++) {
       const segment = transcriptData.segments[i];
       
-      // Add speech segment
+      // Calculate TRUE speech duration using word-level timestamps
+      // This excludes leading/trailing pauses within the segment
+      let speechStart = segment.start;
+      let speechEnd = segment.end;
+      
+      if (segment.words && segment.words.length > 0) {
+        // Use first word start and last word end for accurate timing
+        speechStart = segment.words[0].start;
+        speechEnd = segment.words[segment.words.length - 1].end;
+      }
+      
+      // Add speech segment with accurate timing
       segments.push({
         text: segment.text,
-        start: segment.start,
-        end: segment.end,
-        duration: segment.end - segment.start,
+        start: speechStart,
+        end: speechEnd,
+        duration: speechEnd - speechStart,
         type: "speech"
       });
 
