@@ -48,7 +48,7 @@ export class SoundRegenerator {
     });
 
     // Get video duration
-    const videoMetadata = await this.ffmpeg.getMetadata(lipsyncedVideoPath);
+    const videoMetadata = await this.ffmpeg.getVideoMetadata(lipsyncedVideoPath);
     const duration = videoMetadata.duration;
 
     // Paths
