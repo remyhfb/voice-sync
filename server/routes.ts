@@ -258,7 +258,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             throw new Error(`Failed to download lip-synced video: ${lipsyncedResponse.statusText}`);
           }
           const lipsyncedBuffer = Buffer.from(await lipsyncedResponse.arrayBuffer());
-          await fs.writeFile(lipsyncedVideoPath, lipsyncedBuffer);
+          const rawLipsyncedPath = `/tmp/raw_lipsynced_${job.id}.mp4`;
+          await fs.writeFile(rawLipsyncedPath, lipsyncedBuffer);
+          
+          // Re-encode for browser compatibility (H.264/AAC)
+          console.log(`[JOB ${job.id}] [LIPSYNC] Re-encoding for browser compatibility`);
+          await ffmpegService.reencodeForBrowser(rawLipsyncedPath, lipsyncedVideoPath);
+          await fs.unlink(rawLipsyncedPath).catch(() => {});
+          
           await storage.updateProcessingJob(job.id, { progress: 90 });
 
           // Step 7: Upload final video (90-100%)

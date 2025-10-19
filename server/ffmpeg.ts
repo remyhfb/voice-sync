@@ -88,6 +88,39 @@ export class FFmpegService {
   }
 
   /**
+   * Re-encode video for maximum browser compatibility
+   * Uses H.264/AAC codecs which are universally supported
+   */
+  async reencodeForBrowser(
+    inputPath: string,
+    outputPath: string,
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // Re-encode to H.264/AAC which is universally supported by browsers
+      ffmpeg(inputPath)
+        .videoCodec('libx264')
+        .audioCodec('aac')
+        .outputOptions([
+          '-preset', 'fast',           // Fast encoding
+          '-crf', '23',                // Good quality (lower = better, 23 is default)
+          '-pix_fmt', 'yuv420p',       // Pixel format for maximum compatibility
+          '-movflags', '+faststart',   // Enable streaming (metadata at start)
+          '-profile:v', 'main',        // H.264 main profile for compatibility
+          '-level', '4.0',             // H.264 level for wide device support
+        ])
+        .output(outputPath)
+        .on('end', () => {
+          console.log(`[FFmpeg] Re-encoded video for browser compatibility: ${outputPath}`);
+          resolve();
+        })
+        .on('error', (err: any) => {
+          reject(new Error(`FFmpeg re-encode error: ${err.message}`));
+        })
+        .run();
+    });
+  }
+
+  /**
    * Time-stretch audio to match target duration while preserving pitch
    */
   async timeStretchAudio(
