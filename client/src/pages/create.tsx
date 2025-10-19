@@ -2,11 +2,13 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { FileUploadZone } from "@/components/file-upload-zone";
 import { ProcessingTimeline, ProcessingStep } from "@/components/processing-timeline";
-import { Card } from "@/components/ui/card";
+import AlignmentReport from "@/components/AlignmentReport";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Sparkles, Loader2, Download, RotateCcw } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { ProcessingJob } from "@shared/schema";
 
@@ -98,6 +100,14 @@ export default function CreatePage() {
     setVideoFile(null);
     setAudioFile(null);
     setCurrentJobId(null);
+  };
+
+  const handleVideoError = (projectId: string) => {
+    toast({
+      variant: "destructive",
+      title: "Video playback error",
+      description: "Unable to load the video. The file may be corrupted or missing. Try downloading it instead.",
+    });
   };
 
   const getProcessingSteps = (): ProcessingStep[] => {
@@ -242,24 +252,45 @@ export default function CreatePage() {
             </Card>
 
             {currentJob.status === "completed" && currentJob.mergedVideoPath && (
-              <Card className="p-6">
-                <h2 className="text-2xl font-semibold mb-4">Download Results</h2>
-                <div className="space-y-4">
-                  <div>
-                    <a
-                      href={currentJob.mergedVideoPath}
-                      download
-                      data-testid="link-download-video"
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover-elevate active-elevate-2"
-                    >
-                      Download Lip-Synced Video
-                    </a>
+              <div className="space-y-6">
+                <Card>
+                  <CardContent className="p-0">
+                    <AspectRatio ratio={16/9}>
+                      <video
+                        key={currentJob.mergedVideoPath}
+                        controls
+                        autoPlay
+                        className="w-full h-full rounded-lg"
+                        onError={() => handleVideoError(currentJob.id)}
+                        data-testid="video-player-result"
+                      >
+                        <source src={currentJob.mergedVideoPath} type="video/mp4" />
+                        Your browser does not support the video tag.
+                      </video>
+                    </AspectRatio>
+                  </CardContent>
+                </Card>
+
+                {currentJob.metadata?.alignmentReport && (
+                  <AlignmentReport report={currentJob.metadata.alignmentReport} />
+                )}
+
+                <Card className="p-6">
+                  <h2 className="text-xl font-semibold mb-4">Next Steps</h2>
+                  <div className="flex gap-3">
+                    <Button size="lg" asChild className="flex-1">
+                      <a href={currentJob.mergedVideoPath} download data-testid="button-download-result">
+                        <Download className="h-4 w-4 mr-2" />
+                        Download Video
+                      </a>
+                    </Button>
+                    <Button size="lg" variant="outline" onClick={handleReset} className="flex-1" data-testid="button-create-another">
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      Create Another
+                    </Button>
                   </div>
-                  <Button data-testid="button-process-another" onClick={handleReset}>
-                    Process Another Video
-                  </Button>
-                </div>
-              </Card>
+                </Card>
+              </div>
             )}
 
             {currentJob.status === "failed" && (
