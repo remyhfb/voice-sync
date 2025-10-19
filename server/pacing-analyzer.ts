@@ -231,7 +231,7 @@ export class PacingAnalyzer {
 
   /**
    * Align VEO phrases with user phrases using word-level alignment
-   * Handles cases where phrase segmentation differs between VEO and user
+   * VEO phrase boundaries are the source of truth
    */
   alignPhrases(veoWords: WordTiming[], userWords: WordTiming[], veoPhrases: PhraseTiming[], userPhrases: PhraseTiming[]): PhraseComparison[] {
     // First, align words to handle segmentation differences
@@ -241,43 +241,56 @@ export class PacingAnalyzer {
     
     const comparisons: PhraseComparison[] = [];
     
-    // For each VEO phrase, find the corresponding user phrase(s) based on word alignments
+    // Create a map of VEO word start time -> global word index for fast lookup
+    const veoWordIndexMap = new Map<number, number>();
+    veoWords.forEach((word, idx) => {
+      veoWordIndexMap.set(word.start, idx);
+    });
+    
+    // For each VEO phrase (source of truth), find corresponding user words
     for (let i = 0; i < veoPhrases.length; i++) {
       const veoPhrase = veoPhrases[i];
       
-      // Find which words in this VEO phrase are aligned
-      const veoWordIndices = new Set(
-        veoPhrase.words.map((_, idx) => {
-          // Find the original word index in veoWords array
-          for (let j = 0; j < veoWords.length; j++) {
-            if (veoWords[j].start === veoPhrase.words[idx].start) {
-              return j;
-            }
-          }
-          return -1;
-        }).filter(idx => idx >= 0)
-      );
+      console.log(`[PacingAnalyzer] Processing VEO phrase ${i + 1}/${veoPhrases.length}: "${veoPhrase.text}"`);
+      
+      // Find global word indices for this VEO phrase
+      const veoWordIndices: number[] = [];
+      for (let j = 0; j < veoPhrase.words.length; j++) {
+        const wordStart = veoPhrase.words[j].start;
+        const globalIdx = veoWordIndexMap.get(wordStart);
+        if (globalIdx !== undefined) {
+          veoWordIndices.push(globalIdx);
+        }
+      }
+      
+      console.log(`[PacingAnalyzer]   VEO phrase has ${veoPhrase.words.length} words, mapped to global indices: ${veoWordIndices.join(', ')}`);
       
       // Find aligned user word indices
       const alignedUserIndices = wordAlignments
-        .filter(a => veoWordIndices.has(a.veoWordIndex))
-        .map(a => a.userWordIndex);
+        .filter(a => veoWordIndices.includes(a.veoWordIndex))
+        .map(a => a.userWordIndex)
+        .sort((a, b) => a - b); // Sort to ensure chronological order
       
-      if (alignedUserIndices.length === 0) continue;
+      console.log(`[PacingAnalyzer]   Aligned to ${alignedUserIndices.length} user words at indices: ${alignedUserIndices.join(', ')}`);
       
-      // Find min/max user word indices to determine phrase span
+      if (alignedUserIndices.length === 0) {
+        console.log(`[PacingAnalyzer]   WARNING: No user words aligned for VEO phrase "${veoPhrase.text}", skipping`);
+        continue;
+      }
+      
+      // Build user phrase from aligned words (use all words in the span)
       const minUserIdx = Math.min(...alignedUserIndices);
       const maxUserIdx = Math.max(...alignedUserIndices);
-      
-      // Build user phrase from aligned words
       const userAlignedWords = userWords.slice(minUserIdx, maxUserIdx + 1);
       const userPhraseText = userAlignedWords.map(w => w.word).join(' ');
       const userStartTime = userAlignedWords[0].start;
       const userEndTime = userAlignedWords[userAlignedWords.length - 1].end;
       const userDuration = userEndTime - userStartTime;
       
+      console.log(`[PacingAnalyzer]   User phrase: "${userPhraseText}" (${userDuration.toFixed(2)}s)`);
+      
       // Calculate confidence based on word alignment quality
-      const relevantAlignments = wordAlignments.filter(a => veoWordIndices.has(a.veoWordIndex));
+      const relevantAlignments = wordAlignments.filter(a => veoWordIndices.includes(a.veoWordIndex));
       const avgConfidence = relevantAlignments.length > 0 ?
         relevantAlignments.reduce((sum, a) => sum + a.confidence, 0) / relevantAlignments.length : 0;
       
@@ -292,6 +305,8 @@ export class PacingAnalyzer {
       } else {
         status = "too_slow";
       }
+      
+      console.log(`[PacingAnalyzer]   Delta: ${timeDelta.toFixed(2)}s (${percentDifference.toFixed(1)}%) - ${status}`);
       
       comparisons.push({
         phraseIndex: i,
@@ -310,6 +325,7 @@ export class PacingAnalyzer {
       });
     }
 
+    console.log(`[PacingAnalyzer] Created ${comparisons.length} phrase comparisons from ${veoPhrases.length} VEO phrases`);
     return comparisons;
   }
 
