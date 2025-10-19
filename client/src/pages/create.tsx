@@ -3,13 +3,14 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { FileUploadZone } from "@/components/file-upload-zone";
 import { ProcessingTimeline, ProcessingStep } from "@/components/processing-timeline";
 import { PacingReport } from "@/components/PacingReport";
+import { SoundDesignReport } from "@/components/SoundDesignReport";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, Loader2, Download, RotateCcw, BarChart3, AlertCircle, CheckCircle2, X } from "lucide-react";
+import { Sparkles, Loader2, Download, RotateCcw, BarChart3, AlertCircle, CheckCircle2, X, Volume2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { ProcessingJob } from "@shared/schema";
 
@@ -18,6 +19,7 @@ export default function CreatePage() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [analyzingPacing, setAnalyzingPacing] = useState(false);
+  const [regeneratingSoundDesign, setRegeneratingSoundDesign] = useState(false);
   const [successAlertDismissed, setSuccessAlertDismissed] = useState(false);
   const { toast } = useToast();
 
@@ -104,6 +106,7 @@ export default function CreatePage() {
     setAudioFile(null);
     setCurrentJobId(null);
     setSuccessAlertDismissed(false);
+    setRegeneratingSoundDesign(false);
   };
 
   const handleVideoError = (projectId: string) => {
@@ -144,6 +147,47 @@ export default function CreatePage() {
         variant: "destructive",
       });
       setAnalyzingPacing(false);
+    }
+  };
+
+  const handleRegenerateSoundDesign = async () => {
+    if (!currentJobId) return;
+    
+    setRegeneratingSoundDesign(true);
+    try {
+      await apiRequest("POST", `/api/jobs/${currentJobId}/regenerate-sound-design`);
+      
+      toast({
+        title: "Sound design regeneration started",
+        description: "Analyzing and regenerating sound design... This may take a few minutes.",
+      });
+
+      // Poll for updates
+      const pollInterval = setInterval(async () => {
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs", currentJobId] });
+        const job = queryClient.getQueryData<ProcessingJob>(["/api/jobs", currentJobId]);
+        
+        // Stop polling when processing completes or fails
+        if (job?.metadata?.soundDesignAnalysis && 
+            job.metadata.soundDesignAnalysis.status !== "processing") {
+          clearInterval(pollInterval);
+          setRegeneratingSoundDesign(false);
+        }
+      }, 3000);
+
+      // Timeout after 5 minutes as fallback
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        setRegeneratingSoundDesign(false);
+      }, 300000);
+      
+    } catch (error: any) {
+      toast({
+        title: "Sound design regeneration failed",
+        description: error.message || "Failed to regenerate sound design",
+        variant: "destructive",
+      });
+      setRegeneratingSoundDesign(false);
     }
   };
 
@@ -344,6 +388,10 @@ export default function CreatePage() {
                   <PacingReport report={currentJob.metadata.pacingAnalysis} />
                 )}
 
+                {currentJob.metadata?.soundDesignAnalysis && (
+                  <SoundDesignReport analysis={currentJob.metadata.soundDesignAnalysis} />
+                )}
+
                 <Card className="p-6">
                   <h2 className="text-xl font-semibold mb-4">Next Steps</h2>
                   <div className="flex flex-col gap-3">
@@ -378,6 +426,32 @@ export default function CreatePage() {
                           <>
                             <BarChart3 className="h-4 w-4 mr-2" />
                             Analyze Pacing
+                          </>
+                        )}
+                      </Button>
+                    )}
+
+                    {(!currentJob.metadata?.soundDesignAnalysis || 
+                      currentJob.metadata.soundDesignAnalysis.status === "failed") && (
+                      <Button 
+                        size="lg" 
+                        variant="secondary" 
+                        onClick={handleRegenerateSoundDesign}
+                        disabled={regeneratingSoundDesign}
+                        className="w-full"
+                        data-testid="button-regenerate-sound-design"
+                      >
+                        {regeneratingSoundDesign ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Regenerating Sound Design...
+                          </>
+                        ) : (
+                          <>
+                            <Volume2 className="h-4 w-4 mr-2" />
+                            {currentJob.metadata?.soundDesignAnalysis?.status === "failed" 
+                              ? "Retry Sound Design Regeneration" 
+                              : "Regenerate Sound Design (Beta)"}
                           </>
                         )}
                       </Button>

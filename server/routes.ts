@@ -491,6 +491,104 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Sound Design Regeneration (Stage 2) - Optional feature after lip-sync completion
+  app.post("/api/jobs/:jobId/regenerate-sound-design", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const job = await storage.getProcessingJob(jobId);
+
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      if (job.status !== "completed") {
+        return res.status(400).json({ error: "Job must be completed before regenerating sound design" });
+      }
+
+      if (!job.videoPath || !job.mergedVideoPath) {
+        return res.status(400).json({ 
+          error: "Required video files not available. Cannot regenerate sound design." 
+        });
+      }
+
+      // Return immediately - regeneration runs in background
+      res.json({ message: "Sound design regeneration started", jobId });
+
+      // Run regeneration asynchronously
+      (async () => {
+        try {
+          const { soundRegenerator } = await import("./sound-regenerator");
+          
+          logger.info(`Job:${jobId}`, "Starting sound design regeneration");
+          
+          // Update status to processing
+          await storage.updateProcessingJob(jobId, {
+            metadata: {
+              ...job.metadata,
+              soundDesignAnalysis: {
+                status: "processing",
+                detectedSounds: [],
+                generatedPrompts: [],
+                regeneratedAudioPaths: {}
+              }
+            }
+          });
+
+          // Run the complete pipeline  
+          // TypeScript: We already checked these exist above, so use non-null assertions
+          const result = await soundRegenerator.regenerateSoundDesign(
+            job.videoPath!,
+            job.mergedVideoPath!,
+            '/tmp/sound-design'
+          );
+
+          // Store results in metadata
+          await storage.updateProcessingJob(jobId, {
+            metadata: {
+              ...job.metadata,
+              soundDesignAnalysis: {
+                status: "completed" as const,
+                detectedSounds: result.detectedSounds as Array<{
+                  timestamp: number;
+                  label: string;
+                  confidence: number;
+                  category: "ambient" | "effect" | "music" | "other";
+                }>,
+                generatedPrompts: result.generatedPrompts,
+                regeneratedAudioPaths: result.regeneratedAudioPaths,
+                enhancedVideoPath: result.enhancedVideoPath
+              }
+            }
+          });
+
+          logger.info(`Job:${jobId}`, "Sound design regeneration complete", {
+            detectedSounds: result.detectedSounds.length,
+            hasEnhanced: !!result.enhancedVideoPath
+          });
+        } catch (error: any) {
+          logger.error(`Job:${jobId}`, "Sound design regeneration failed", error);
+          
+          // Update with error status
+          await storage.updateProcessingJob(jobId, {
+            metadata: {
+              ...job.metadata,
+              soundDesignAnalysis: {
+                status: "failed" as const,
+                detectedSounds: [],
+                generatedPrompts: [],
+                regeneratedAudioPaths: {},
+                errorMessage: error.message
+              }
+            }
+          });
+        }
+      })();
+    } catch (error: any) {
+      logger.error("Routes", "Error starting sound design regeneration", error);
+      res.status(500).json({ error: error.message || "Failed to start sound design regeneration" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
