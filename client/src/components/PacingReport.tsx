@@ -126,30 +126,12 @@ export function PacingReport({ report }: PacingReportProps) {
           </div>
         </div>
 
-        {/* Recommendations */}
-        {report.recommendations.length > 0 && (
-          <div className="space-y-2">
-            <h4 className="text-sm font-semibold">Recommendations</h4>
-            <div className="space-y-2">
-              {report.recommendations.map((rec, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 text-sm"
-                  data-testid={`recommendation-${idx}`}
-                >
-                  <div className="flex-shrink-0 mt-0.5">
-                    <AlertTriangle className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="flex-1">{rec}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Phrase Comparisons */}
         <div className="space-y-3">
-          <h4 className="text-sm font-semibold">Phrase-by-Phrase Analysis</h4>
+          <div className="flex items-center gap-2">
+            <h4 className="text-sm font-semibold">Phrase-by-Phrase Analysis</h4>
+            <Badge variant="outline" className="text-xs">Beta</Badge>
+          </div>
           <ScrollArea className="h-[400px] pr-4">
             <div className="space-y-3">
               {report.phraseComparisons.map((comparison) => (
@@ -197,16 +179,6 @@ export function PacingReport({ report }: PacingReportProps) {
                       </div>
                     </div>
                   </div>
-
-                  {Math.abs(comparison.percentDifference) > 5 && (
-                    <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
-                      {comparison.status === "too_slow" ? (
-                        <span>💡 Try speeding up this phrase by {Math.round(Math.abs(comparison.percentDifference))}%</span>
-                      ) : (
-                        <span>💡 Try slowing down this phrase by {Math.round(Math.abs(comparison.percentDifference))}%</span>
-                      )}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
