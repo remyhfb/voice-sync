@@ -379,8 +379,7 @@ export class ElevenLabsService {
           body: JSON.stringify({
             text: prompt,
             duration_seconds: durationSeconds,
-            prompt_influence: promptInfluence,
-            model_id: "eleven_text_to_sound_v2" // ***V2 MODEL*** as requested
+            prompt_influence: promptInfluence
           }),
         },
       );
