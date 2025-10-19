@@ -150,27 +150,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Step 4: Align segments and calculate time-stretch ratios (40-45%)
           console.log(`[JOB ${job.id}] [LIPSYNC] Aligning segments and calculating time-stretch ratios`);
           const alignments = await aligner.alignSegments(veoSegments, userSegments);
-          const alignmentReport = aligner.generateAlignmentReport(alignments);
           
-          console.log(`[JOB ${job.id}] [LIPSYNC] Alignment quality: ${alignmentReport.summary.alignmentQuality}`);
-          console.log(`[JOB ${job.id}] [LIPSYNC] Avg ratio: ${alignmentReport.summary.avgTimeStretchRatio.toFixed(2)}`);
-          console.log(`[JOB ${job.id}] [LIPSYNC] Issues: ${alignmentReport.summary.criticalIssues} critical, ${alignmentReport.summary.majorIssues} major, ${alignmentReport.summary.minorIssues} minor`);
-          
-          // Log warning if quality is poor, but continue processing
-          // The report will show users what needs improvement
-          if (alignmentReport.summary.alignmentQuality === "poor") {
-            console.warn(`[JOB ${job.id}] [LIPSYNC] WARNING: Poor alignment quality detected (avg ratio: ${alignmentReport.summary.avgTimeStretchRatio.toFixed(2)}). Continuing with time-stretching...`);
-          }
-          
-          await storage.updateProcessingJob(job.id, { 
-            progress: 45,
-            metadata: {
-              ...job.metadata,
-              alignmentQuality: alignmentReport.summary.alignmentQuality,
-              avgTimeStretchRatio: alignmentReport.summary.avgTimeStretchRatio,
-              alignmentReport: alignmentReport
-            }
-          });
+          await storage.updateProcessingJob(job.id, { progress: 45 });
 
           // Step 5: Time-stretch video segments (45-70%)
           console.log(`[JOB ${job.id}] [LIPSYNC] Time-stretching video to match user timing`);
