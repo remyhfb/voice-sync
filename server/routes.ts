@@ -150,25 +150,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Step 4: Align segments and calculate time-stretch ratios (40-45%)
           console.log(`[JOB ${job.id}] [LIPSYNC] Aligning segments and calculating time-stretch ratios`);
           const alignments = await aligner.alignSegments(veoSegments, userSegments);
-          
-          // Generate pacing report (speech-only duration comparison)
-          console.log(`[JOB ${job.id}] [LIPSYNC] Generating pacing report`);
-          const pacingReport = aligner.generatePacingReport(alignments);
-          console.log(`[JOB ${job.id}] [LIPSYNC] Pacing: ${pacingReport.summary.overallPacing}, ${pacingReport.summary.segmentsNeedingAdjustment}/${pacingReport.summary.totalSegments} segments need adjustment`);
-          
-          // Get latest job to preserve existing metadata
-          const jobForPacing = await storage.getProcessingJob(job.id);
-          if (!jobForPacing) {
-            throw new Error("Job not found during pacing report update");
-          }
-          
-          await storage.updateProcessingJob(job.id, { 
-            progress: 45,
-            metadata: {
-              ...jobForPacing.metadata,
-              pacingReport
-            }
-          });
+          await storage.updateProcessingJob(job.id, { progress: 45 });
 
           // Step 5: Time-stretch video segments (45-70%)
           console.log(`[JOB ${job.id}] [LIPSYNC] Time-stretching video to match user timing`);
