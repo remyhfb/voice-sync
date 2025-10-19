@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { FileUploadZone } from "@/components/file-upload-zone";
 import { ProcessingTimeline, ProcessingStep } from "@/components/processing-timeline";
-import { AlignmentReport } from "@/components/AlignmentReport";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -270,10 +269,6 @@ export default function CreatePage() {
                     </AspectRatio>
                   </CardContent>
                 </Card>
-
-                {currentJob.metadata?.alignmentReport && (
-                  <AlignmentReport report={currentJob.metadata.alignmentReport} />
-                )}
 
                 <Card className="p-6">
                   <h2 className="text-xl font-semibold mb-4">Next Steps</h2>

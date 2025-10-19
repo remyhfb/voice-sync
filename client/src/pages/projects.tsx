@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { ProcessingJob } from "@shared/schema";
-import { AlignmentReport } from "@/components/AlignmentReport";
 import { useState } from "react";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { useToast } from "@/hooks/use-toast";
@@ -204,10 +203,6 @@ export default function ProjectsPage() {
                       </AspectRatio>
                     </CardContent>
                   </Card>
-
-                  {project.metadata?.alignmentReport && (
-                    <AlignmentReport report={project.metadata.alignmentReport} />
-                  )}
                 </>
               )}
             </div>
