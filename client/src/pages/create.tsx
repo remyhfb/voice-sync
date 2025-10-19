@@ -10,7 +10,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Sparkles, Loader2, Download, RotateCcw } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { ProcessingJob } from "@shared/schema";
-import { VadPacingAnalysis } from "@/components/VadPacingAnalysis";
 
 export default function CreatePage() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -270,14 +269,6 @@ export default function CreatePage() {
                     </AspectRatio>
                   </CardContent>
                 </Card>
-
-                <VadPacingAnalysis 
-                  jobId={currentJob.id} 
-                  existingAnalysis={(currentJob.metadata as any)?.pacingAnalysis}
-                  onAnalysisComplete={() => {
-                    queryClient.invalidateQueries({ queryKey: ["/api/jobs", currentJobId] });
-                  }}
-                />
 
                 <Card className="p-6">
                   <h2 className="text-xl font-semibold mb-4">Next Steps</h2>

@@ -6,11 +6,6 @@ export interface TimeSegment {
   end: number;
   duration: number;
   type: "speech" | "pause";
-  words?: Array<{
-    word: string;
-    start: number;
-    end: number;
-  }>;
 }
 
 export interface AlignmentResult {
@@ -50,14 +45,13 @@ export class SegmentAligner {
     for (let i = 0; i < transcriptData.segments.length; i++) {
       const segment = transcriptData.segments[i];
       
-      // Add speech segment with word-level timestamps
+      // Add speech segment
       segments.push({
         text: segment.text,
         start: segment.start,
         end: segment.end,
         duration: segment.end - segment.start,
-        type: "speech",
-        words: segment.words // Preserve word-level timestamps
+        type: "speech"
       });
 
       // Add pause after this segment if there's a next segment

@@ -36,15 +36,15 @@ export class ReplicateService {
     const audioDataUri = `data:audio/mpeg;base64,${audioBase64}`;
 
     const output = await this.client.run(
-      "hnesk/whisper-wordtimestamps",
+      "openai/whisper:4d50797290df275329f202e48c76360b3f22b08d28c196cbc54600319435f8d2",
       {
         input: {
           audio: audioDataUri,
-          model: "large-v2",
+          model: "large-v3",
           language: "en",
           translate: false,
           temperature: 0,
-          word_timestamps: true,
+          transcription: "srt", // Get timestamps in SRT format
           suppress_tokens: "-1",
           logprob_threshold: -1.0,
           no_speech_threshold: 0.6,
