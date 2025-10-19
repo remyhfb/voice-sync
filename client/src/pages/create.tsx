@@ -116,9 +116,7 @@ export default function CreatePage() {
     
     setAnalyzingPacing(true);
     try {
-      await apiRequest(`/api/jobs/${currentJobId}/analyze-pacing`, {
-        method: "POST"
-      });
+      await apiRequest("POST", `/api/jobs/${currentJobId}/analyze-pacing`);
       
       toast({
         title: "Analysis started",

@@ -37,9 +37,7 @@ export default function ProjectsPage() {
   const handleAnalyzePacing = async (jobId: string) => {
     setAnalyzingPacing(jobId);
     try {
-      await apiRequest(`/api/jobs/${jobId}/analyze-pacing`, {
-        method: "POST"
-      });
+      await apiRequest("POST", `/api/jobs/${jobId}/analyze-pacing`);
       
       toast({
         title: "Analysis started",
