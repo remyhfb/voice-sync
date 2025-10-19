@@ -345,6 +345,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Pacing analysis endpoint - runs independently from main pipeline
+  app.post("/api/jobs/:id/analyze-pacing", async (req, res) => {
+    try {
+      const jobId = req.params.id;
+      const job = await storage.getProcessingJob(jobId);
+      
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      if (job.status !== "completed") {
+        return res.status(400).json({ error: "Job must be completed before analyzing pacing" });
+      }
+
+      if (!job.extractedAudioPath || !job.convertedAudioPath) {
+        return res.status(400).json({ error: "Audio files not available for analysis" });
+      }
+
+      // Return immediately - analysis runs in background
+      res.json({ message: "Pacing analysis started", jobId });
+
+      // Run analysis asynchronously
+      (async () => {
+        try {
+          const { PacingAnalyzer } = await import("./pacing-analyzer");
+          const analyzer = new PacingAnalyzer();
+
+          console.log(`[JOB ${jobId}] [PACING] Starting pacing analysis`);
+          
+          const report = await analyzer.analyzePacing(
+            job.extractedAudioPath,
+            job.convertedAudioPath
+          );
+
+          // Store simplified report in metadata (without full word arrays)
+          const simplifiedReport = {
+            summary: report.summary,
+            phraseComparisons: report.phraseComparisons.map(pc => ({
+              phraseIndex: pc.phraseIndex,
+              veoPhrase: {
+                text: pc.veoPhrase.text,
+                totalDuration: pc.veoPhrase.totalDuration,
+                startTime: pc.veoPhrase.startTime,
+                endTime: pc.veoPhrase.endTime
+              },
+              userPhrase: {
+                text: pc.userPhrase.text,
+                totalDuration: pc.userPhrase.totalDuration,
+                startTime: pc.userPhrase.startTime,
+                endTime: pc.userPhrase.endTime
+              },
+              timeDelta: pc.timeDelta,
+              percentDifference: pc.percentDifference,
+              status: pc.status
+            })),
+            recommendations: report.recommendations
+          };
+
+          await storage.updateProcessingJob(jobId, {
+            metadata: {
+              ...job.metadata,
+              pacingAnalysis: simplifiedReport
+            }
+          });
+
+          console.log(`[JOB ${jobId}] [PACING] Analysis complete`);
+        } catch (error: any) {
+          console.error(`[JOB ${jobId}] [PACING] Error:`, error.message);
+          console.error(`[JOB ${jobId}] [PACING] Stack:`, error.stack);
+        }
+      })();
+    } catch (error: any) {
+      console.error("Error starting pacing analysis:", error);
+      res.status(500).json({ error: error.message || "Failed to start pacing analysis" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
