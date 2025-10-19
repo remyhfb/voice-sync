@@ -33,6 +33,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/objects/:objectPath(*)", async (req, res) => {
     try {
       const objectFile = await objectStorageService.getObjectEntityFile(req.path);
+      
+      // Set proper Content-Type for videos
+      if (req.path.includes('/uploads/')) {
+        res.setHeader('Content-Type', 'video/mp4');
+      }
+      
       objectStorageService.downloadObject(objectFile, res);
     } catch (error) {
       console.error("Error accessing object:", error);
