@@ -20,6 +20,14 @@ export interface PhraseTiming {
   endTime: number;
 }
 
+export interface WordAlignment {
+  veoWordIndex: number;
+  userWordIndex: number;
+  veoWord: WordTiming;
+  userWord: WordTiming;
+  confidence: number; // 0-1 score
+}
+
 export interface PhraseComparison {
   phraseIndex: number;
   veoPhrase: PhraseTiming;
@@ -27,6 +35,7 @@ export interface PhraseComparison {
   timeDelta: number; // user duration - veo duration
   percentDifference: number; // (timeDelta / veo duration) * 100
   status: "too_fast" | "too_slow" | "perfect";
+  confidence: number; // 0-1 score based on word alignment
 }
 
 export interface PacingAnalysisReport {
@@ -129,20 +138,150 @@ export class PacingAnalyzer {
   }
 
   /**
-   * Align VEO phrases with user phrases using text similarity
-   * Simple word-based matching to find corresponding phrases
+   * Calculate Levenshtein distance (edit distance) between two strings
+   * Used for text similarity matching
    */
-  alignPhrases(veoPhrases: PhraseTiming[], userPhrases: PhraseTiming[]): PhraseComparison[] {
+  private levenshteinDistance(str1: string, str2: string): number {
+    const m = str1.length;
+    const n = str2.length;
+    const dp: number[][] = Array(m + 1).fill(0).map(() => Array(n + 1).fill(0));
+
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        if (str1[i - 1].toLowerCase() === str2[j - 1].toLowerCase()) {
+          dp[i][j] = dp[i - 1][j - 1];
+        } else {
+          dp[i][j] = Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]) + 1;
+        }
+      }
+    }
+
+    return dp[m][n];
+  }
+
+  /**
+   * Align VEO and user words using dynamic programming
+   * Matches words based on text similarity and preserves chronological order
+   */
+  private alignWords(veoWords: WordTiming[], userWords: WordTiming[]): WordAlignment[] {
+    const alignments: WordAlignment[] = [];
+    
+    // Normalize words for comparison
+    const normalizeWord = (w: string) => w.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    let veoIdx = 0;
+    let userIdx = 0;
+    
+    while (veoIdx < veoWords.length && userIdx < userWords.length) {
+      const veoWord = veoWords[veoIdx];
+      const userWord = userWords[userIdx];
+      
+      const veoNorm = normalizeWord(veoWord.word);
+      const userNorm = normalizeWord(userWord.word);
+      
+      // Calculate similarity (0-1, higher is better)
+      const maxLen = Math.max(veoNorm.length, userNorm.length);
+      const distance = this.levenshteinDistance(veoNorm, userNorm);
+      const similarity = maxLen > 0 ? 1 - (distance / maxLen) : 1;
+      
+      // If words match well (>70% similarity), align them
+      if (similarity > 0.7) {
+        alignments.push({
+          veoWordIndex: veoIdx,
+          userWordIndex: userIdx,
+          veoWord,
+          userWord,
+          confidence: similarity
+        });
+        veoIdx++;
+        userIdx++;
+      } else {
+        // Check if next word in either sequence matches better
+        const veoNextMatch = userIdx + 1 < userWords.length ? 
+          1 - (this.levenshteinDistance(veoNorm, normalizeWord(userWords[userIdx + 1].word)) / maxLen) : 0;
+        const userNextMatch = veoIdx + 1 < veoWords.length ?
+          1 - (this.levenshteinDistance(normalizeWord(veoWords[veoIdx + 1].word), userNorm) / maxLen) : 0;
+        
+        if (veoNextMatch > userNextMatch && veoNextMatch > 0.7) {
+          // Skip current user word
+          userIdx++;
+        } else if (userNextMatch > 0.7) {
+          // Skip current VEO word
+          veoIdx++;
+        } else {
+          // Low confidence match, but still align to preserve order
+          alignments.push({
+            veoWordIndex: veoIdx,
+            userWordIndex: userIdx,
+            veoWord,
+            userWord,
+            confidence: similarity
+          });
+          veoIdx++;
+          userIdx++;
+        }
+      }
+    }
+    
+    return alignments;
+  }
+
+  /**
+   * Align VEO phrases with user phrases using word-level alignment
+   * Handles cases where phrase segmentation differs between VEO and user
+   */
+  alignPhrases(veoWords: WordTiming[], userWords: WordTiming[], veoPhrases: PhraseTiming[], userPhrases: PhraseTiming[]): PhraseComparison[] {
+    // First, align words to handle segmentation differences
+    const wordAlignments = this.alignWords(veoWords, userWords);
+    
+    console.log(`[PacingAnalyzer] Aligned ${wordAlignments.length} words with avg confidence ${(wordAlignments.reduce((sum, a) => sum + a.confidence, 0) / wordAlignments.length).toFixed(2)}`);
+    
     const comparisons: PhraseComparison[] = [];
     
-    // Simple sequential alignment - assumes same order
-    const minLength = Math.min(veoPhrases.length, userPhrases.length);
-    
-    for (let i = 0; i < minLength; i++) {
+    // For each VEO phrase, find the corresponding user phrase(s) based on word alignments
+    for (let i = 0; i < veoPhrases.length; i++) {
       const veoPhrase = veoPhrases[i];
-      const userPhrase = userPhrases[i];
       
-      const timeDelta = userPhrase.totalDuration - veoPhrase.totalDuration;
+      // Find which words in this VEO phrase are aligned
+      const veoWordIndices = new Set(
+        veoPhrase.words.map((_, idx) => {
+          // Find the original word index in veoWords array
+          for (let j = 0; j < veoWords.length; j++) {
+            if (veoWords[j].start === veoPhrase.words[idx].start) {
+              return j;
+            }
+          }
+          return -1;
+        }).filter(idx => idx >= 0)
+      );
+      
+      // Find aligned user word indices
+      const alignedUserIndices = wordAlignments
+        .filter(a => veoWordIndices.has(a.veoWordIndex))
+        .map(a => a.userWordIndex);
+      
+      if (alignedUserIndices.length === 0) continue;
+      
+      // Find min/max user word indices to determine phrase span
+      const minUserIdx = Math.min(...alignedUserIndices);
+      const maxUserIdx = Math.max(...alignedUserIndices);
+      
+      // Build user phrase from aligned words
+      const userAlignedWords = userWords.slice(minUserIdx, maxUserIdx + 1);
+      const userPhraseText = userAlignedWords.map(w => w.word).join(' ');
+      const userStartTime = userAlignedWords[0].start;
+      const userEndTime = userAlignedWords[userAlignedWords.length - 1].end;
+      const userDuration = userEndTime - userStartTime;
+      
+      // Calculate confidence based on word alignment quality
+      const relevantAlignments = wordAlignments.filter(a => veoWordIndices.has(a.veoWordIndex));
+      const avgConfidence = relevantAlignments.length > 0 ?
+        relevantAlignments.reduce((sum, a) => sum + a.confidence, 0) / relevantAlignments.length : 0;
+      
+      const timeDelta = userDuration - veoPhrase.totalDuration;
       const percentDifference = (timeDelta / veoPhrase.totalDuration) * 100;
       
       let status: "too_fast" | "too_slow" | "perfect";
@@ -157,10 +296,17 @@ export class PacingAnalyzer {
       comparisons.push({
         phraseIndex: i,
         veoPhrase,
-        userPhrase,
+        userPhrase: {
+          text: userPhraseText,
+          words: userAlignedWords,
+          totalDuration: userDuration,
+          startTime: userStartTime,
+          endTime: userEndTime
+        },
         timeDelta,
         percentDifference,
-        status
+        status,
+        confidence: avgConfidence
       });
     }
 
@@ -287,8 +433,8 @@ export class PacingAnalyzer {
 
       console.log(`[PacingAnalyzer] VEO: ${veoPhrases.length} phrases, User: ${userPhrases.length} phrases`);
 
-      // Step 3: Align and compare phrases
-      const comparisons = this.alignPhrases(veoPhrases, userPhrases);
+      // Step 3: Align and compare phrases using word-level alignment
+      const comparisons = this.alignPhrases(veoWords, userWords, veoPhrases, userPhrases);
 
       // Step 4: Generate report
       const report = this.generateReport(comparisons);
