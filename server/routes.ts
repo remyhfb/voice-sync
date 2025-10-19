@@ -34,12 +34,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const objectFile = await objectStorageService.getObjectEntityFile(req.path);
       
-      // Set proper Content-Type and cache headers for videos
+      // Set proper Content-Type for videos
       if (req.path.includes('/uploads/')) {
         res.setHeader('Content-Type', 'video/mp4');
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.setHeader('Pragma', 'no-cache');
-        res.setHeader('Expires', '0');
       }
       
       await objectStorageService.downloadObject(objectFile, req, res);
