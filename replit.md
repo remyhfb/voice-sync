@@ -26,30 +26,37 @@ The system offers three primary processing pipelines:
 2.  **Time-Aligned TTS**: Generates speech from text with word-level timing precision but neutral delivery.
 3.  **Lip-Sync (Your Voice)**: A hybrid approach using the user's authentic voice acting combined with AI lip-sync technology. This pipeline includes audio cleanup (ElevenLabs), transcription (Whisper), segment alignment, video time-stretching (FFmpeg), and final lip-sync (Sync Labs).
 
-#### Stage 2: Sound Design Regeneration (Beta)
-An optional post-processing feature that recreates the VEO video's professional sound design (ambient noise + sound effects) using AI detection and generation. This is a completely separate pipeline triggered by an optional button after lip-sync completion.
+#### Ambient Sound Enhancement (Optional)
+A simplified optional feature that adds professional ambient atmosphere to the finished lip-synced video. Uses ElevenLabs Sound Effects API to generate high-quality ambient sounds based on user selection.
+
+**Available Ambient Types:**
+- **Office**: Gentle office ambience with soft typing and paper shuffling
+- **Café**: Busy coffee shop atmosphere with distant chatter and espresso machine sounds
+- **Nature**: Peaceful outdoor ambience with birds chirping and wind rustling leaves
+- **City**: Urban street ambience with distant traffic and city sounds
+- **Studio**: Professional recording studio ambience with subtle room tone
+- **Home**: Quiet home ambience with soft ambient room tone
 
 **Technical Implementation:**
-- **Python FastAPI Microservice** (`python-services/sound-detection/`): Uses `panns_inference` for precise temporal sound detection (10ms precision, 527 AudioSet classes)
-- **Node.js Orchestrator** (`server/sound-regenerator.ts`): Coordinates detection, prompt generation, and audio mixing
-- **ElevenLabs v2 API**: Generates ambient sounds and effects from AI-generated prompts
-- **FFmpeg Integration**: Mixes generated audio with lip-synced video
+- **ElevenLabs Sound Effects API**: Generates 30-second ambient loops using v2 model with 0.5 prompt influence
+- **FFmpeg Audio Mixing**: Loops ambient audio and mixes at 15% volume with original lip-synced video (preserving 100% original audio)
+- **No External Services**: All processing happens in single Replit environment using built-in integrations
 
-**Deployment Requirements:**
-The Python service requires separate deployment:
-1. Install dependencies: `fastapi`, `uvicorn`, `panns_inference`, `torch`, `librosa`, `soundfile`, `numpy`
-2. Run service: `uvicorn app:app --host 0.0.0.0 --port 8001`
-3. Service must be accessible at `http://localhost:8001` for the orchestrator to work
+**API Endpoint:**
+- `POST /api/jobs/:jobId/enhance-ambient` - Body: `{ ambientType: "office" | "cafe" | "nature" | "city" | "studio" | "home" }`
+- Runs asynchronously in background
+- Stores enhanced video path in job metadata under `ambientEnhancement`
 
 **UI Flow:**
-- Button appears after successful lip-sync completion (or after failed regeneration for retry)
-- Polling updates status every 3 seconds, stops on completion/failure
-- SoundDesignReport component displays detected sounds, confidence scores, generated prompts, and file paths
+- Ambient type selector (dropdown) appears after successful lip-sync completion
+- User selects desired ambient type and clicks "Add Ambient Sound"
+- Polling updates status every 3 seconds until completion
+- Enhanced video becomes available for download alongside original result
 
 ## External Dependencies
 
-*   **ElevenLabs Speech-to-Speech API**: Used for instant voice cloning, speech-to-speech conversion with timing preservation, and background noise removal.
-*   **FFmpeg**: Integrated for audio extraction, format conversion, and metadata extraction from video files.
+*   **ElevenLabs API**: Used for instant voice cloning, speech-to-speech conversion with timing preservation, background noise removal, and ambient sound generation via Sound Effects API.
+*   **FFmpeg**: Integrated for audio extraction, format conversion, video time-stretching, audio mixing, and metadata extraction.
 *   **Google Cloud Storage**: Utilized for scalable object storage of project files.
 *   **PostgreSQL (via Neon)**: The primary database for application data.
 *   **Drizzle ORM**: Used for type-safe database interactions with PostgreSQL.
