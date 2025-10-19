@@ -176,12 +176,39 @@ export default function CreatePage() {
         requestBody.preset = selectedAmbientType;
       }
       
+      // Clear old ambient enhancement data from cache before starting
+      const currentJob = queryClient.getQueryData<ProcessingJob>(["/api/jobs", currentJobId]);
+      if (currentJob) {
+        queryClient.setQueryData<ProcessingJob>(["/api/jobs", currentJobId], {
+          ...currentJob,
+          metadata: {
+            ...currentJob.metadata,
+            ambientEnhancement: {
+              status: "processing" as const,
+              ...(requestBody.preset && { preset: requestBody.preset as any }),
+              ...(requestBody.customPrompt && { customPrompt: requestBody.customPrompt })
+            }
+          }
+        });
+      }
+      
       await apiRequest("POST", `/api/jobs/${currentJobId}/preview-ambient`, requestBody);
       
       toast({
         title: "Generating preview...",
         description: "Creating ambient sound for you to listen to",
       });
+
+      // Timeout after 2 minutes with notification
+      const timeout = setTimeout(() => {
+        clearInterval(pollInterval);
+        setEnhancingAmbient(false);
+        toast({
+          title: "Preview generation timed out",
+          description: "The preview is taking longer than expected. Please try again or contact support.",
+          variant: "destructive",
+        });
+      }, 120000);
 
       // Poll for updates
       const pollInterval = setInterval(async () => {
@@ -192,6 +219,7 @@ export default function CreatePage() {
         if (job?.metadata?.ambientEnhancement && 
             job.metadata.ambientEnhancement.status !== "processing") {
           clearInterval(pollInterval);
+          clearTimeout(timeout);
           setEnhancingAmbient(false);
           
           if (job.metadata.ambientEnhancement.status === "completed") {
@@ -199,15 +227,15 @@ export default function CreatePage() {
               title: "Preview ready!",
               description: "Listen to the ambient sound below and apply it to your video if you like it",
             });
+          } else if (job.metadata.ambientEnhancement.status === "failed") {
+            toast({
+              title: "Preview generation failed",
+              description: job.metadata.ambientEnhancement.errorMessage || "Failed to generate ambient sound preview",
+              variant: "destructive",
+            });
           }
         }
       }, 3000);
-
-      // Timeout after 2 minutes as fallback
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        setEnhancingAmbient(false);
-      }, 120000);
       
     } catch (error: any) {
       toast({
@@ -235,12 +263,36 @@ export default function CreatePage() {
         requestBody.preset = job.metadata.ambientEnhancement.preset;
       }
       
+      // Clear enhancedVideoPath from cache before starting (keep preview)
+      queryClient.setQueryData<ProcessingJob>(["/api/jobs", currentJobId], {
+        ...job,
+        metadata: {
+          ...job.metadata,
+          ambientEnhancement: {
+            ...job.metadata.ambientEnhancement,
+            status: "processing",
+            enhancedVideoPath: undefined
+          }
+        }
+      });
+      
       await apiRequest("POST", `/api/jobs/${currentJobId}/enhance-ambient`, requestBody);
       
       toast({
         title: "Mixing ambient sound...",
         description: "Adding the ambient sound to your video",
       });
+
+      // Timeout after 3 minutes with notification
+      const timeout = setTimeout(() => {
+        clearInterval(pollInterval);
+        setEnhancingAmbient(false);
+        toast({
+          title: "Enhancement timed out",
+          description: "The enhancement is taking longer than expected. Please try again or contact support.",
+          variant: "destructive",
+        });
+      }, 180000);
 
       // Poll for updates
       const pollInterval = setInterval(async () => {
@@ -250,6 +302,7 @@ export default function CreatePage() {
         // Check if enhancedVideoPath is available (processing complete)
         if (job?.metadata?.ambientEnhancement?.enhancedVideoPath) {
           clearInterval(pollInterval);
+          clearTimeout(timeout);
           setEnhancingAmbient(false);
           
           toast({
@@ -258,15 +311,16 @@ export default function CreatePage() {
           });
         } else if (job?.metadata?.ambientEnhancement?.status === "failed") {
           clearInterval(pollInterval);
+          clearTimeout(timeout);
           setEnhancingAmbient(false);
+          
+          toast({
+            title: "Enhancement failed",
+            description: job.metadata.ambientEnhancement.errorMessage || "Failed to add ambient sound to video",
+            variant: "destructive",
+          });
         }
       }, 3000);
-
-      // Timeout after 3 minutes as fallback
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        setEnhancingAmbient(false);
-      }, 180000);
       
     } catch (error: any) {
       toast({
