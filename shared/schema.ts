@@ -64,6 +64,28 @@ export const processingJobs = pgTable("processing_jobs", {
       }>;
       recommendations: string[];
     };
+    soundDesignAnalysis?: {
+      status: "processing" | "completed" | "failed";
+      detectedSounds: Array<{
+        timestamp: number;
+        label: string;
+        confidence: number;
+        category: "ambient" | "effect" | "music" | "other";
+      }>;
+      generatedPrompts: Array<{
+        startTime: number;
+        endTime: number;
+        prompt: string;
+        duration: number;
+      }>;
+      regeneratedAudioPaths: {
+        ambientAudio?: string;
+        effectsAudio?: string;
+        mixedAudio?: string;
+      };
+      enhancedVideoPath?: string;
+      errorMessage?: string;
+    };
     errorMessage?: string;
     errorStack?: string;
   }>(),
