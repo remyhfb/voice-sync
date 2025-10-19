@@ -1,4 +1,4 @@
-import { Mic, Upload, FolderOpen, Settings, Sparkles } from "lucide-react";
+import { Upload, FolderOpen, Settings, Sparkles } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -20,12 +20,6 @@ const menuItems = [
     url: "/",
     icon: Upload,
     testId: "link-create",
-  },
-  {
-    title: "Voice Library",
-    url: "/voices",
-    icon: Mic,
-    testId: "link-voices",
   },
   {
     title: "Projects",
@@ -53,7 +47,7 @@ export function AppSidebar() {
           </div>
           <div>
             <h1 className="text-lg font-bold tracking-tight">VoiceSwap</h1>
-            <p className="text-xs text-muted-foreground">AI Voice Cloning</p>
+            <p className="text-xs text-muted-foreground">AI Lip-Sync for VEO</p>
           </div>
         </div>
       </SidebarHeader>
@@ -82,7 +76,7 @@ export function AppSidebar() {
       <SidebarFooter className="p-4 border-t border-sidebar-border">
         <div className="flex items-center justify-between">
           <div className="text-xs text-muted-foreground">
-            Powered by ElevenLabs
+            Powered by Sync Labs
           </div>
           <ThemeToggle />
         </div>

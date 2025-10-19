@@ -7,7 +7,6 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
 import CreatePage from "@/pages/create";
-import VoicesPage from "@/pages/voices";
 import ProjectsPage from "@/pages/projects";
 import SettingsPage from "@/pages/settings";
 import NotFound from "@/pages/not-found";
@@ -16,7 +15,6 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={CreatePage} />
-      <Route path="/voices" component={VoicesPage} />
       <Route path="/projects" component={ProjectsPage} />
       <Route path="/settings" component={SettingsPage} />
       <Route component={NotFound} />
