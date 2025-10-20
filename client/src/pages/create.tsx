@@ -260,12 +260,10 @@ export default function CreatePage() {
     
     setEnhancingAmbient(true);
     try {
-      // Use the volume from the preview metadata (what user actually heard)
-      // Fall back to current slider value only if metadata doesn't have it
-      const volumeToUse = job.metadata.ambientEnhancement.volume ?? ambientVolume;
-      
+      // Always use the current slider value for mixing
+      // This allows users to adjust volume after preview without re-previewing
       const requestBody: { preset?: string; customPrompt?: string; volume: number } = { 
-        volume: volumeToUse 
+        volume: ambientVolume 
       };
       
       if (job.metadata.ambientEnhancement.customPrompt) {
