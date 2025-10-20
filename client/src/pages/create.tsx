@@ -676,15 +676,15 @@ export default function CreatePage() {
 
                 {currentJob.metadata?.voiceFilter?.enhancedVideoPath && (
                   <Card className="p-6">
-                    <h2 className="text-xl font-semibold mb-2">Voice Filtered Video</h2>
+                    <h2 className="text-xl font-semibold mb-2">Video with Voice Effect</h2>
                     <p className="text-sm text-muted-foreground mb-3">
-                      Applied {currentJob.metadata.voiceFilter.preset?.replace('_', ' ')} filter at {currentJob.metadata.voiceFilter.mix}% mix
+                      Applied {currentJob.metadata.voiceFilter.preset?.replace('_', ' ')} effect at {currentJob.metadata.voiceFilter.mix}% strength
                     </p>
                     <div className="flex gap-3">
                       <Button size="lg" asChild className="flex-1">
                         <a href={currentJob.metadata.voiceFilter.enhancedVideoPath} download data-testid="button-download-voice-filtered">
                           <Download className="h-4 w-4 mr-2" />
-                          Download Filtered Video
+                          Download Video with Effect
                         </a>
                       </Button>
                       <Button 
@@ -705,7 +705,7 @@ export default function CreatePage() {
                         data-testid="button-try-different-filter"
                       >
                         <RotateCcw className="h-4 w-4 mr-2" />
-                        Try Different Filter
+                        Try Different Effect
                       </Button>
                     </div>
                   </Card>
@@ -916,14 +916,14 @@ export default function CreatePage() {
                     {!currentJob.metadata?.voiceFilter?.enhancedVideoPath && (
                       <div className="space-y-3 mt-6 pt-6 border-t">
                         <div className="flex flex-col gap-2">
-                          <label className="text-sm font-medium">Apply Voice Filter (Optional)</label>
+                          <label className="text-sm font-medium">Add Voice Effect (Optional)</label>
                           <Select 
                             value={selectedVoiceFilter} 
                             onValueChange={setSelectedVoiceFilter}
                             disabled={applyingVoiceFilter}
                           >
                             <SelectTrigger data-testid="select-voice-filter">
-                              <SelectValue placeholder="Select filter..." />
+                              <SelectValue placeholder="Select effect..." />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="concert_hall" data-testid="option-concert-hall">Concert Hall</SelectItem>
@@ -940,7 +940,7 @@ export default function CreatePage() {
                         </div>
                         <div className="flex flex-col gap-2">
                           <div className="flex items-center justify-between">
-                            <label className="text-sm font-medium">Effect Mix</label>
+                            <label className="text-sm font-medium">Effect Strength</label>
                             <span className="text-sm text-muted-foreground font-mono">{voiceFilterMix}%</span>
                           </div>
                           <Slider
@@ -968,12 +968,12 @@ export default function CreatePage() {
                           {applyingVoiceFilter ? (
                             <>
                               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Applying Filter...
+                              Applying Effect...
                             </>
                           ) : (
                             <>
                               <Sparkles className="h-4 w-4 mr-2" />
-                              Apply Voice Filter
+                              Apply Voice Effect
                             </>
                           )}
                         </Button>

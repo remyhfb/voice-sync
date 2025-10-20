@@ -846,7 +846,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (job.status !== "completed") {
-        return res.status(400).json({ error: "Job must be completed before applying voice filter" });
+        return res.status(400).json({ error: "Job must be completed before applying voice effect" });
       }
 
       // Use ambient-enhanced video if available, otherwise use lip-synced video
@@ -854,12 +854,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!sourceVideoPath) {
         return res.status(400).json({ 
-          error: "No video file available to apply filter" 
+          error: "No video file available to apply effect" 
         });
       }
 
-      // Return immediately - filter runs in background
-      res.json({ message: "Voice filter processing started", jobId });
+      // Return immediately - effect runs in background
+      res.json({ message: "Voice effect processing started", jobId });
 
       // Run filter asynchronously
       (async () => {
@@ -962,7 +962,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       })();
     } catch (error: any) {
       logger.error("Routes", "Error starting voice filter", error);
-      res.status(500).json({ error: error.message || "Failed to start voice filter" });
+      res.status(500).json({ error: error.message || "Failed to start voice effect" });
     }
   });
 

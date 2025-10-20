@@ -28,7 +28,7 @@ The system offers three primary processing pipelines:
 
 The system also offers two optional post-processing enhancements:
 4.  **Ambient Sound Enhancement**: Adds professional ambient atmosphere to finished videos using ElevenLabs Sound Effects API (see below).
-5.  **Voice Filter (Pipeline 4)**: Applies acoustic effects to voice audio using FFmpeg built-in filters.
+5.  **Voice Effects**: Applies acoustic effects to voice audio using FFmpeg built-in filters.
 
 #### Ambient Sound Enhancement (Optional)
 A simplified optional feature that adds professional ambient atmosphere to the finished lip-synced video. Uses ElevenLabs Sound Effects API to generate high-quality ambient sounds based on preset selection or custom user prompts.
@@ -78,10 +78,10 @@ A simplified optional feature that adds professional ambient atmosphere to the f
 - Completion message shows which preset or custom prompt was used and the applied volume
 - **Iteration Support**: After enhanced video is ready, "Try Different Ambient" button allows users to reset and experiment with different presets, prompts, or volumes without reprocessing the lip-sync
 
-#### Voice Filter (Pipeline 4)
+#### Voice Effects
 An optional feature that applies acoustic effects to the voice audio using FFmpeg's built-in audio filters. No external APIs required - all processing happens server-side using FFmpeg.
 
-**Available Filter Presets:**
+**Available Effect Presets:**
 - **Concert Hall**: Large reverb with long tail for spacious sound
 - **Small Room**: Short, tight reverb for intimate acoustic
 - **Cathedral**: Very large reverb with very long tail for massive space
@@ -91,7 +91,7 @@ An optional feature that applies acoustic effects to the voice audio using FFmpe
 
 **Technical Implementation:**
 - **FFmpeg Audio Filters**: Uses `aecho` for reverb effects, `highpass`/`lowpass` for telephone/radio effects
-- **Mix Control**: User-adjustable slider (0-100%) controls wet/dry mix - 0% = original voice, 100% = full effect
+- **Strength Control**: User-adjustable slider (0-100%) controls effect strength - 0% = original voice, 100% = full effect
 - **No External API**: All processing server-side using FFmpeg built-in filters
 - **Applies to Best Available Video**: Uses ambient-enhanced video if available, otherwise uses lip-synced video
 - **Implementation Note**: Uses `child_process.spawn()` directly instead of fluent-ffmpeg to ensure proper argument escaping for complex filter chains. The amix filter uses `weights` parameter only (normalize option not available in this FFmpeg version).
@@ -100,18 +100,18 @@ An optional feature that applies acoustic effects to the voice audio using FFmpe
 - `POST /api/jobs/:jobId/apply-voice-filter`
   - Request body: `{ preset: string, mix: number }`
   - Preset validation: Must be one of the 6 available presets
-  - Mix range: 0-100 (converted to 0.0-1.0 decimal for FFmpeg)
+  - Mix range: 0-100 (converted to 0.0-1.0 decimal for FFmpeg, representing effect strength)
   - Runs asynchronously in background
-  - Stores filtered video path, preset, and mix level in job metadata under `voiceFilter`
+  - Stores video path with effect, preset, and strength level in job metadata under `voiceFilter`
 
 **UI Flow:**
 - After successful lip-sync completion (with or without ambient enhancement), user sees:
   - Preset selector dropdown (6 options)
-  - Effect mix slider (0-100%, default 50%)
-- **Apply Workflow**: User selects preset and adjusts mix → clicks "Apply Voice Filter" → system processes video with selected effect
+  - Effect strength slider (0-100%, default 50%)
+- **Apply Workflow**: User selects preset and adjusts strength → clicks "Apply Voice Effect" → system processes video with selected effect
 - Polling updates status every 3 seconds until completion
-- Filtered video becomes available for download alongside other results
-- **Iteration Support**: After filtered video is ready, "Try Different Filter" button allows users to reset and experiment with different presets or mix levels
+- Video with effect becomes available for download alongside other results
+- **Iteration Support**: After video with effect is ready, "Try Different Effect" button allows users to reset and experiment with different presets or strength levels without reprocessing the lip-sync
 
 ## External Dependencies
 

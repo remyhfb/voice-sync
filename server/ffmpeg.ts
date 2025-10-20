@@ -571,7 +571,7 @@ export class FFmpegService {
   }
 
   /**
-   * Apply voice filter effect to video audio
+   * Apply voice effect to video audio
    * Uses spawn directly instead of fluent-ffmpeg to properly handle filter_complex quoting
    */
   async applyVoiceFilter(
@@ -585,7 +585,7 @@ export class FFmpegService {
     const { preset, mix } = options;
     const mixDecimal = mix / 100; // Convert to 0-1 range
 
-    logger.debug("FFmpeg", "Applying voice filter", {
+    logger.debug("FFmpeg", "Applying voice effect", {
       video: path.basename(videoPath),
       preset,
       mix
@@ -626,7 +626,7 @@ export class FFmpegService {
         break;
       
       default:
-        throw new Error(`Unknown voice filter preset: ${preset}`);
+        throw new Error(`Unknown voice effect preset: ${preset}`);
     }
 
     // Apply filter with mix control
@@ -655,7 +655,7 @@ export class FFmpegService {
         outputPath
       ];
 
-      logger.debug("FFmpeg", "Voice filter command args", { 
+      logger.debug("FFmpeg", "Voice effect command args", { 
         ffmpegPath: ffmpegInstaller.path,
         args 
       });
@@ -670,19 +670,19 @@ export class FFmpegService {
 
       ffmpegProcess.on('close', (code) => {
         if (code === 0) {
-          logger.info("FFmpeg", "Voice filter applied", { preset, mix });
+          logger.info("FFmpeg", "Voice effect applied", { preset, mix });
           resolve();
         } else {
-          logger.error("FFmpeg", "Voice filter failed", { 
+          logger.error("FFmpeg", "Voice effect failed", { 
             code, 
             stderr: stderrOutput.slice(-500) // Last 500 chars
           });
-          reject(new Error(`FFmpeg voice filter error: ffmpeg exited with code ${code}`));
+          reject(new Error(`Failed to apply voice effect: ffmpeg exited with code ${code}`));
         }
       });
 
       ffmpegProcess.on('error', (err) => {
-        reject(new Error(`FFmpeg voice filter error: ${err.message}`));
+        reject(new Error(`Failed to apply voice effect: ${err.message}`));
       });
     });
   }
