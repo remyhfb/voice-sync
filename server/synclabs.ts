@@ -116,7 +116,7 @@ export class SyncLabsService {
     });
   }
 
-  private async pollJob(jobId: string, maxAttempts = 120, intervalMs = 5000): Promise<{
+  private async pollJob(jobId: string, maxAttempts = 360, intervalMs = 5000): Promise<{
     videoUrl: string;
     creditsDeducted: number;
   }> {
