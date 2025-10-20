@@ -170,7 +170,9 @@ export default function CreatePage() {
     
     setEnhancingAmbient(true);
     try {
-      const requestBody: { preset?: string; customPrompt?: string } = {};
+      const requestBody: { preset?: string; customPrompt?: string; volume: number } = { 
+        volume: ambientVolume 
+      };
       
       if (customAmbientPrompt.trim()) {
         requestBody.customPrompt = customAmbientPrompt.trim();
@@ -187,6 +189,7 @@ export default function CreatePage() {
             ...currentJob.metadata,
             ambientEnhancement: {
               status: "processing" as const,
+              volume: ambientVolume,
               ...(requestBody.preset && { preset: requestBody.preset as any }),
               ...(requestBody.customPrompt && { customPrompt: requestBody.customPrompt })
             }
@@ -257,8 +260,12 @@ export default function CreatePage() {
     
     setEnhancingAmbient(true);
     try {
+      // Use the volume from the preview metadata (what user actually heard)
+      // Fall back to current slider value only if metadata doesn't have it
+      const volumeToUse = job.metadata.ambientEnhancement.volume ?? ambientVolume;
+      
       const requestBody: { preset?: string; customPrompt?: string; volume: number } = { 
-        volume: ambientVolume 
+        volume: volumeToUse 
       };
       
       if (job.metadata.ambientEnhancement.customPrompt) {

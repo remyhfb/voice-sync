@@ -564,7 +564,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const { preset, customPrompt } = validationResult.data;
+      const { preset, customPrompt, volume } = validationResult.data;
       
       const job = await storage.getProcessingJob(jobId);
 
@@ -583,7 +583,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const { ElevenLabsService } = await import("./elevenlabs");
           const { AMBIENT_TYPES } = await import("./sound-regenerator");
           
-          logger.info(`Job:${jobId}`, "Generating ambient sound preview", { preset, customPrompt });
+          logger.info(`Job:${jobId}`, "Generating ambient sound preview", { preset, customPrompt, volume });
           
           let latestJob = await storage.getProcessingJob(jobId);
           
@@ -593,7 +593,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               ambientEnhancement: {
                 status: "processing",
                 preset,
-                customPrompt
+                customPrompt,
+                volume
               }
             }
           });
@@ -636,12 +637,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 preset,
                 customPrompt,
                 ambientPrompt: prompt,
+                volume,
                 previewAudioPath
               }
             }
           });
 
-          logger.info(`Job:${jobId}`, "Ambient sound preview complete", { preset, customPrompt });
+          logger.info(`Job:${jobId}`, "Ambient sound preview complete", { preset, customPrompt, volume });
         } catch (error: any) {
           logger.error(`Job:${jobId}`, "Ambient sound preview failed", error);
           
@@ -654,6 +656,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 status: "failed" as const,
                 preset,
                 customPrompt,
+                volume,
                 errorMessage: error.message
               }
             }
