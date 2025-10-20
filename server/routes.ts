@@ -438,8 +438,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Step 5: Time-stretch video segments (50-75%)
           logger.info(`Job:${job.id}`, "Time-stretching video to match user timing");
           
-          // Get active video path (trimmed if available, otherwise original)
-          const activeVideoPath = getActiveVideoPath(job);
+          // Use the job's videoPath directly (which is the local downloaded file for edited jobs)
+          const activeVideoPath = job.videoPath;
           if (!activeVideoPath) {
             throw new Error("No video path available");
           }
