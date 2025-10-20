@@ -215,9 +215,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
 
           // Step 2.7: Normalize user audio to -14 LUFS (20-25%)
-          // TEMPORARILY DISABLED FOR TESTING
-          logger.info(`Job:${job.id}`, "SKIPPING normalization for testing");
-          const normalizedUserAudioPath = trimmedUserAudioPath; // Use trimmed audio directly
+          logger.info(`Job:${job.id}`, "Normalizing user audio to -14 LUFS (YouTube standard)");
+          const normalizedUserAudioPath = `/tmp/uploads/${job.id}_normalized_user.mp3`;
+          
+          await ffmpegService.normalizeAudioLoudness(trimmedUserAudioPath, normalizedUserAudioPath, {
+            targetLoudness: -14,  // YouTube standard
+            truePeak: -1.0,       // Prevent clipping
+            loudnessRange: 7.0    // Natural dynamic range for speech
+          });
+          
+          logger.info(`Job:${job.id}`, "Audio normalization complete");
           await storage.updateProcessingJob(job.id, { progress: 25 });
 
           // Step 3: Transcribe both with Whisper (25-45%)
@@ -294,6 +301,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           // Generate signed GET URL (1 hour TTL) for Sync Labs to download
           const videoReadUrl = await objectStorageService.getSignedReadURL(videoUploadUrl, 3600);
+          
+          // METADATA VERIFICATION: Check audio metadata BEFORE uploading to Sync Labs
+          logger.info(`Job:${job.id}`, "📊 INSPECTING AUDIO METADATA BEFORE SYNC LABS UPLOAD");
+          const audioMetadata = await ffmpegService.getAudioMetadata(normalizedUserAudioPath);
+          logger.info(`Job:${job.id}`, "🔍 AUDIO METADATA PROOF:", {
+            hasDuration: audioMetadata.duration !== null,
+            duration: audioMetadata.duration,
+            format: audioMetadata.format,
+            size: audioMetadata.size,
+            bitrate: audioMetadata.bitrate,
+            sampleRate: audioMetadata.sampleRate,
+            channels: audioMetadata.channels,
+            tags: audioMetadata.tags,
+            rawFormatData: audioMetadata.rawMetadata
+          });
+          
+          if (audioMetadata.duration === null || audioMetadata.duration === 0) {
+            logger.error(`Job:${job.id}`, "❌ HARD PROOF: Audio file MISSING duration metadata!");
+            throw new Error("Audio file is missing required duration metadata for Sync Labs");
+          } else {
+            logger.info(`Job:${job.id}`, `✅ HARD PROOF: Audio file HAS duration metadata: ${audioMetadata.duration}s`);
+          }
           
           // Upload normalized audio for Sync Labs
           const audioUploadUrl = await objectStorageService.getObjectEntityUploadURL();

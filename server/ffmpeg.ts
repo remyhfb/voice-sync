@@ -68,6 +68,45 @@ export class FFmpegService {
     });
   }
 
+  /**
+   * Get detailed metadata from an audio file using ffprobe
+   * Returns duration, format, bitrate, and all available metadata tags
+   */
+  async getAudioMetadata(audioPath: string): Promise<{
+    duration: number | null;
+    format: string;
+    size: number;
+    bitrate: number | null;
+    sampleRate: number | null;
+    channels: number | null;
+    tags: Record<string, any>;
+    rawMetadata: any;
+  }> {
+    const stats = await fs.stat(audioPath);
+
+    return new Promise((resolve, reject) => {
+      ffmpeg.ffprobe(audioPath, (err: any, metadata: any) => {
+        if (err) {
+          reject(new Error(`FFprobe error: ${err.message}`));
+          return;
+        }
+
+        const audioStream = metadata.streams?.find((s: any) => s.codec_type === 'audio');
+
+        resolve({
+          duration: metadata.format.duration || null,
+          format: metadata.format.format_name || "unknown",
+          size: stats.size,
+          bitrate: metadata.format.bit_rate ? parseInt(metadata.format.bit_rate) : null,
+          sampleRate: audioStream?.sample_rate ? parseInt(audioStream.sample_rate) : null,
+          channels: audioStream?.channels || null,
+          tags: metadata.format.tags || {},
+          rawMetadata: metadata.format
+        });
+      });
+    });
+  }
+
   async convertAudioFormat(
     inputPath: string,
     outputPath: string,
