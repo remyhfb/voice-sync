@@ -646,7 +646,7 @@ export class FFmpegService {
     return new Promise((resolve, reject) => {
       ffmpeg()
         .input(videoPath)
-        .complexFilter(filterComplex, 'aout')
+        .complexFilter(filterComplex)  // No second param - avoid auto-mapping
         .outputOptions([
           '-map', '0:v',      // Use video from input
           '-map', '[aout]',   // Use filtered+mixed audio
