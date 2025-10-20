@@ -5,9 +5,18 @@ import { promises as fs } from "fs";
 import path from "path";
 import { spawn } from "child_process";
 import { logger } from "./logger";
+import type { ProcessingJob } from "@shared/schema";
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 ffmpeg.setFfprobePath(ffprobeInstaller.path);
+
+/**
+ * Get the active video path for a job.
+ * Returns trimmed video if available, otherwise returns original video.
+ */
+export function getActiveVideoPath(job: ProcessingJob): string | null {
+  return job.metadata?.trimmedVideoPath || job.videoPath;
+}
 
 export class FFmpegService {
   async extractAudio(

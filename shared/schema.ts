@@ -21,6 +21,7 @@ export const processingJobs = pgTable("processing_jobs", {
     convertedAudioDuration?: number;
     syncLabsCredits?: number;
     originalVideoPath?: string;
+    trimmedVideoPath?: string;
     silenceTrimmed?: {
       user: {
         startTrimmed: number;
@@ -167,3 +168,19 @@ export const applyVoiceFilterSchema = z.object({
 });
 
 export type ApplyVoiceFilterRequest = z.infer<typeof applyVoiceFilterSchema>;
+
+// Video trim request schema
+export const trimVideoSchema = z.object({
+  segments: z.array(
+    z.object({
+      startTime: z.number().min(0, "Start time must be non-negative"),
+      endTime: z.number().min(0, "End time must be non-negative"),
+    })
+  ).min(1, "At least one segment is required")
+  .refine(
+    (segments) => segments.every(seg => seg.endTime > seg.startTime),
+    { message: "End time must be greater than start time for all segments" }
+  ),
+});
+
+export type TrimVideoRequest = z.infer<typeof trimVideoSchema>;
