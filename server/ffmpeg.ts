@@ -547,7 +547,7 @@ export class FFmpegService {
           // volume=1.0 keeps original, volume=0.15 makes ambient subtle
           `[0:a]volume=${videoVolume}[a0]`,
           `[1:a]volume=${ambientVolume}[a1]`,
-          `[a0][a1]amix=inputs=2:duration=first:dropout_transition=2[aout]`
+          `[a0][a1]amix=inputs=2:duration=first:dropout_transition=0[aout]`
         ])
         .outputOptions([
           '-map', '0:v',      // Use video from first input
