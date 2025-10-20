@@ -6,7 +6,7 @@ import { createWriteStream } from "fs";
 import { storage } from "./storage";
 import { ElevenLabsService } from "./elevenlabs";
 import { FFmpegService, getActiveVideoPath } from "./ffmpeg";
-import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
 import { SyncLabsService } from "./synclabs";
 import { SegmentAligner } from "./segment-aligner";
 import { logger } from "./logger";
@@ -257,18 +257,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const uploadsIndex = pathParts.indexOf('uploads');
         const objectPath = pathParts.slice(uploadsIndex).join('/');
         
-        const objectStorageService = new ObjectStorageService();
-        const signedUrl = await objectStorageService.getSignedReadURL(
-          `https://storage.googleapis.com/${bucketName}/${privateDirName}/${objectPath}`,
-          3600
-        );
+        // Use authenticated storage client to download directly (avoids sidecar signing endpoint)
+        const fullObjectPath = `${privateDirName}/${objectPath}`;
+        logger.info(`Job:${existingJobId}`, `Downloading from bucket: ${bucketName}, path: ${fullObjectPath}`);
         
-        const videoResponse = await fetch(signedUrl);
-        if (!videoResponse.ok) {
-          throw new Error(`Failed to download video from storage: ${videoResponse.statusText}`);
-        }
+        const file = objectStorageClient.bucket(bucketName).file(fullObjectPath);
+        const [videoBuffer] = await file.download();
         
-        const videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
         localVideoPath = `/tmp/uploads/${existingJobId}_downloaded.mp4`;
         await fs.writeFile(localVideoPath, videoBuffer);
         
