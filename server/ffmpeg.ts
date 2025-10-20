@@ -412,6 +412,50 @@ export class FFmpegService {
   }
 
   /**
+   * Normalize audio to target loudness level using EBU R128 loudness normalization
+   * Targets -14 LUFS (YouTube standard) for consistent volume levels
+   */
+  async normalizeAudioLoudness(
+    inputPath: string,
+    outputPath: string,
+    options: {
+      targetLoudness?: number;  // Target integrated loudness in LUFS (-14 default for YouTube)
+      truePeak?: number;         // Maximum true peak in dBTP (-1.0 default)
+      loudnessRange?: number;    // Target loudness range in LU (7.0 default)
+    } = {}
+  ): Promise<void> {
+    const targetLoudness = options.targetLoudness ?? -14;  // -14 LUFS is YouTube standard
+    const truePeak = options.truePeak ?? -1.0;              // Prevent clipping
+    const loudnessRange = options.loudnessRange ?? 7.0;     // Natural dynamic range
+
+    logger.debug("FFmpeg", "Normalizing audio loudness", {
+      target: `${targetLoudness} LUFS`,
+      truePeak: `${truePeak} dBTP`,
+      loudnessRange: `${loudnessRange} LU`
+    });
+
+    return new Promise((resolve, reject) => {
+      ffmpeg(inputPath)
+        .audioFilters(`loudnorm=I=${targetLoudness}:TP=${truePeak}:LRA=${loudnessRange}`)
+        .outputOptions([
+          '-acodec', 'libmp3lame',
+          '-ar', '48000',       // 48kHz sample rate
+          '-ac', '2',           // Stereo
+          '-ab', '192k'         // 192kbps bitrate
+        ])
+        .output(outputPath)
+        .on('end', () => {
+          logger.info("FFmpeg", "Audio normalization complete", { targetLoudness: `${targetLoudness} LUFS` });
+          resolve();
+        })
+        .on('error', (err: any) => {
+          reject(new Error(`FFmpeg normalization error: ${err.message}`));
+        })
+        .run();
+    });
+  }
+
+  /**
    * Extract a video segment (no audio) by time range
    */
   async extractVideoSegment(
