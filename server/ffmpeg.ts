@@ -633,6 +633,8 @@ export class FFmpegService {
     const wetWeight = mixDecimal.toFixed(2);
     const filterComplex = `[0:a]asplit=2[dry][wet];[wet]${audioFilter}[wet_processed];[dry][wet_processed]amix=inputs=2:weights='${dryWeight} ${wetWeight}':normalize=0[aout]`;
 
+    logger.debug("FFmpeg", "Filter complex string", { filterComplex });
+
     return new Promise((resolve, reject) => {
       ffmpeg()
         .input(videoPath)
@@ -645,6 +647,9 @@ export class FFmpegService {
           '-b:a', '192k'      // Audio bitrate
         ])
         .output(outputPath)
+        .on("start", (commandLine: string) => {
+          logger.debug("FFmpeg", "Voice filter command", { commandLine });
+        })
         .on("end", () => {
           logger.info("FFmpeg", "Voice filter applied", { preset, mix });
           resolve();
