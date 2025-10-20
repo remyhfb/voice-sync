@@ -620,7 +620,7 @@ export class FFmpegService {
       
       case "radio":
         // Band-pass with slight resonance (like AM radio)
-        audioFilter = `highpass=f=200,lowpass=f=5000,equalizer=f=2500:width=1000:g=3`;
+        audioFilter = `highpass=f=200,lowpass=f=5000,equalizer=f=2500:width_type=h:width=1000:g=3`;
         break;
       
       default:
