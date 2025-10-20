@@ -167,22 +167,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "No video available for this job" });
       }
 
-      // Extract bucket name from PRIVATE_OBJECT_DIR
+      // Extract bucket name and private dir from PRIVATE_OBJECT_DIR
       const privateObjectDir = process.env.PRIVATE_OBJECT_DIR || "";
-      const bucketName = privateObjectDir.split('/')[1]; // /bucket-name/.private -> bucket-name
+      // e.g., /replit-objstore-xxx/.private -> bucket = replit-objstore-xxx, privateDir = .private
+      const pathSegments = privateObjectDir.split('/').filter(s => s);
+      const bucketName = pathSegments[0];
+      const privateDirName = pathSegments[1]; // .private
       
-      if (!bucketName) {
+      if (!bucketName || !privateDirName) {
         return res.status(500).json({ error: "Object storage not configured" });
       }
 
-      // Extract full object path from /objects/uploads/<id> -> uploads/<id>
+      // Extract object ID from /objects/uploads/<id> -> <id>
       const pathParts = videoPath.split('/');
       const uploadsIndex = pathParts.indexOf('uploads');
       if (uploadsIndex === -1 || uploadsIndex === pathParts.length - 1) {
         return res.status(500).json({ error: "Invalid video path format" });
       }
       
-      const objectPath = pathParts.slice(uploadsIndex).join('/'); // uploads/<id>
+      const objectId = pathParts[uploadsIndex + 1];
+      
+      // Construct full object path with .private directory
+      const objectPath = `${privateDirName}/uploads/${objectId}`;
 
       // Generate signed URL with full object path
       const objectStorageService = new ObjectStorageService();
