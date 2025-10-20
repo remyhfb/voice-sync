@@ -571,6 +571,108 @@ export class FFmpegService {
   }
 
   /**
+   * Generate voice effect preview (audio only, 30 seconds)
+   * Extracts audio from video, applies effect, outputs MP3
+   */
+  async generateVoiceEffectPreview(
+    videoPath: string,
+    outputPath: string,
+    options: {
+      preset: "concert_hall" | "small_room" | "cathedral" | "telephone" | "radio" | "stadium" | "outdoor" | "outdoor_pro";
+      mix: number; // 0-100, how much effect to apply
+    }
+  ): Promise<void> {
+    const { preset, mix } = options;
+    const mixDecimal = mix / 100;
+
+    logger.debug("FFmpeg", "Generating voice effect preview", {
+      video: path.basename(videoPath),
+      preset,
+      mix
+    });
+
+    // Define filter chains (same as applyVoiceFilter)
+    let audioFilter: string;
+    
+    switch (preset) {
+      case "concert_hall":
+        audioFilter = `aecho=0.8:0.9:1000|1800:0.3|0.25`;
+        break;
+      case "cathedral":
+        audioFilter = `aecho=0.8:0.9:1500|2500|3500:0.4|0.3|0.2`;
+        break;
+      case "small_room":
+        audioFilter = `aecho=0.8:0.88:60|122:0.4|0.3`;
+        break;
+      case "stadium":
+        audioFilter = `aecho=0.8:0.9:500|1000|2000:0.35|0.3|0.25`;
+        break;
+      case "telephone":
+        audioFilter = `highpass=f=300,lowpass=f=3400`;
+        break;
+      case "radio":
+        audioFilter = `highpass=f=200,lowpass=f=5000,equalizer=f=2500:width_type=h:width=1000:g=3`;
+        break;
+      case "outdoor":
+        audioFilter = `aecho=0.6:0.5:30|80:0.15|0.1,highpass=f=100,lowpass=f=12000`;
+        break;
+      case "outdoor_pro":
+        audioFilter = `aecho=0.5:0.4:70|100:0.25|0.15,highpass=f=400,lowpass=f=2500`;
+        break;
+      default:
+        throw new Error(`Unknown voice effect preset: ${preset}`);
+    }
+
+    const dryWeight = (1 - mixDecimal).toFixed(2);
+    const wetWeight = mixDecimal.toFixed(2);
+    
+    const filterComplex = `[0:a]asplit=2[dry][wet];[wet]${audioFilter}[wet_processed];[dry][wet_processed]amix=inputs=2:weights='${dryWeight} ${wetWeight}'[aout]`;
+
+    return new Promise((resolve, reject) => {
+      const args = [
+        '-i', videoPath,
+        '-y',
+        '-t', '30', // Only 30 seconds for preview
+        '-filter_complex', filterComplex,
+        '-map', '[aout]',
+        '-c:a', 'libmp3lame',
+        '-b:a', '192k',
+        outputPath
+      ];
+
+      logger.debug("FFmpeg", "Voice effect preview command", { 
+        ffmpegPath: ffmpegInstaller.path,
+        args 
+      });
+
+      const ffmpegProcess = spawn(ffmpegInstaller.path, args);
+      
+      let stderrOutput = '';
+
+      ffmpegProcess.stderr.on('data', (data) => {
+        stderrOutput += data.toString();
+      });
+
+      ffmpegProcess.on('close', (code) => {
+        if (code === 0) {
+          logger.info("FFmpeg", "Voice effect preview generated", { preset, mix });
+          resolve();
+        } else {
+          logger.error("FFmpeg", "Voice effect preview failed", { 
+            code, 
+            stderr: stderrOutput.slice(-500)
+          });
+          reject(new Error(`Failed to generate voice effect preview: ffmpeg exited with code ${code}`));
+        }
+      });
+
+      ffmpegProcess.on('error', (err) => {
+        reject(new Error(`Failed to generate voice effect preview: ${err.message}`));
+      });
+    });
+  }
+
+  /**
    * Apply voice effect to video audio
    * Uses spawn directly instead of fluent-ffmpeg to properly handle filter_complex quoting
    */

@@ -101,6 +101,7 @@ export const processingJobs = pgTable("processing_jobs", {
       status: "processing" | "completed" | "failed";
       preset?: "concert_hall" | "small_room" | "cathedral" | "telephone" | "radio" | "stadium" | "outdoor" | "outdoor_pro";
       mix?: number; // 0-100, how much filter to apply
+      previewAudioPath?: string;
       enhancedVideoPath?: string;
       errorMessage?: string;
     };

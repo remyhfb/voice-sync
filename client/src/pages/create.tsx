@@ -31,6 +31,7 @@ export default function CreatePage() {
   const [successAlertDismissed, setSuccessAlertDismissed] = useState(false);
   const { toast } = useToast();
   const audioPreviewRef = useRef<HTMLAudioElement>(null);
+  const voiceEffectAudioRef = useRef<HTMLAudioElement>(null);
 
   const { data: currentJob } = useQuery<ProcessingJob>({
     queryKey: ["/api/jobs", currentJobId],
@@ -54,6 +55,9 @@ export default function CreatePage() {
       audioPreviewRef.current.volume = ambientVolume / 100;
     }
   }, [ambientVolume]);
+
+  // Note: voiceFilterMix controls the wet/dry blend in FFmpeg, NOT the HTML audio volume
+  // The preview audio should always play at full volume so users can hear the effect clearly
 
   const processVideoMutation = useMutation({
     mutationFn: async (data: { videoFile: File; audioFile: File }) => {
@@ -350,6 +354,90 @@ export default function CreatePage() {
         variant: "destructive",
       });
       setEnhancingAmbient(false);
+    }
+  };
+
+  const handlePreviewVoiceEffect = async () => {
+    if (!currentJobId) return;
+    
+    setApplyingVoiceFilter(true);
+    try {
+      const requestBody = { 
+        preset: selectedVoiceFilter,
+        mix: voiceFilterMix
+      };
+      
+      await apiRequest("POST", `/api/jobs/${currentJobId}/preview-voice-effect`, requestBody);
+      
+      // Poll for preview completion with timeout
+      const timeout = setTimeout(() => {
+        clearInterval(pollInterval);
+        setApplyingVoiceFilter(false);
+        toast({
+          title: "Preview timeout",
+          description: "Preview generation took too long. Please try again.",
+          variant: "destructive",
+        });
+      }, 120000); // 2 minute timeout
+      
+      const pollInterval = setInterval(async () => {
+        try {
+          const response = await fetch(`/api/jobs/${currentJobId}`);
+          if (!response.ok) {
+            clearInterval(pollInterval);
+            clearTimeout(timeout);
+            setApplyingVoiceFilter(false);
+            
+            toast({
+              title: "Preview failed",
+              description: "Failed to check preview status",
+              variant: "destructive",
+            });
+            return;
+          }
+          
+          const job: ProcessingJob = await response.json();
+          if (job.metadata?.voiceFilter?.status === "completed" && job.metadata?.voiceFilter?.previewAudioPath) {
+            clearInterval(pollInterval);
+            clearTimeout(timeout);
+            setApplyingVoiceFilter(false);
+            queryClient.invalidateQueries({ queryKey: ["/api/jobs", currentJobId] });
+            
+            toast({
+              title: "Preview ready!",
+              description: "Listen to the voice effect preview below",
+            });
+          } else if (job.metadata?.voiceFilter?.status === "failed") {
+            clearInterval(pollInterval);
+            clearTimeout(timeout);
+            setApplyingVoiceFilter(false);
+            
+            toast({
+              title: "Preview failed",
+              description: job.metadata.voiceFilter.errorMessage || "Failed to generate preview",
+              variant: "destructive",
+            });
+          }
+        } catch (error: any) {
+          clearInterval(pollInterval);
+          clearTimeout(timeout);
+          setApplyingVoiceFilter(false);
+          
+          toast({
+            title: "Preview failed",
+            description: "Error while checking preview status",
+            variant: "destructive",
+          });
+        }
+      }, 3000);
+      
+    } catch (error: any) {
+      toast({
+        title: "Preview failed",
+        description: error.message || "Failed to generate voice effect preview",
+        variant: "destructive",
+      });
+      setApplyingVoiceFilter(false);
     }
   };
 
@@ -928,70 +1016,147 @@ export default function CreatePage() {
                       Add acoustic effects to transform your voice
                     </p>
                     <div className="space-y-3">
-                        <div className="flex flex-col gap-2">
-                          <label className="text-sm font-medium">Add Voice Effect (Optional)</label>
-                          <Select 
-                            value={selectedVoiceFilter} 
-                            onValueChange={setSelectedVoiceFilter}
-                            disabled={applyingVoiceFilter}
-                          >
-                            <SelectTrigger data-testid="select-voice-filter">
-                              <SelectValue placeholder="Select effect..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="concert_hall" data-testid="option-concert-hall">Concert Hall</SelectItem>
-                              <SelectItem value="small_room" data-testid="option-small-room">Small Room</SelectItem>
-                              <SelectItem value="cathedral" data-testid="option-cathedral">Cathedral</SelectItem>
-                              <SelectItem value="stadium" data-testid="option-stadium">Stadium</SelectItem>
-                              <SelectItem value="outdoor" data-testid="option-outdoor">Outdoor</SelectItem>
-                              <SelectItem value="outdoor_pro" data-testid="option-outdoor-pro">Outdoors - Pro</SelectItem>
-                              <SelectItem value="telephone" data-testid="option-telephone">Telephone</SelectItem>
-                              <SelectItem value="radio" data-testid="option-radio">Radio</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <p className="text-xs text-muted-foreground">
-                            Add acoustic effects to your voice audio
-                          </p>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <div className="flex items-center justify-between">
-                            <label className="text-sm font-medium">Effect Volume</label>
-                            <span className="text-sm text-muted-foreground font-mono">{voiceFilterMix}%</span>
+                      {!currentJob.metadata?.voiceFilter?.previewAudioPath ? (
+                        <>
+                          <div className="flex flex-col gap-2">
+                            <label className="text-sm font-medium">Effect Selection</label>
+                            <Select 
+                              value={selectedVoiceFilter} 
+                              onValueChange={setSelectedVoiceFilter}
+                              disabled={applyingVoiceFilter}
+                            >
+                              <SelectTrigger data-testid="select-voice-filter">
+                                <SelectValue placeholder="Select effect..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="concert_hall" data-testid="option-concert-hall">Concert Hall</SelectItem>
+                                <SelectItem value="small_room" data-testid="option-small-room">Small Room</SelectItem>
+                                <SelectItem value="cathedral" data-testid="option-cathedral">Cathedral</SelectItem>
+                                <SelectItem value="stadium" data-testid="option-stadium">Stadium</SelectItem>
+                                <SelectItem value="outdoor" data-testid="option-outdoor">Outdoor</SelectItem>
+                                <SelectItem value="outdoor_pro" data-testid="option-outdoor-pro">Outdoors - Pro</SelectItem>
+                                <SelectItem value="telephone" data-testid="option-telephone">Telephone</SelectItem>
+                                <SelectItem value="radio" data-testid="option-radio">Radio</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
-                          <Slider
-                            value={[voiceFilterMix]}
-                            onValueChange={(value) => setVoiceFilterMix(value[0])}
-                            min={0}
-                            max={100}
-                            step={5}
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between">
+                              <label className="text-sm font-medium">Effect Strength</label>
+                              <span className="text-sm text-muted-foreground font-mono">{voiceFilterMix}%</span>
+                            </div>
+                            <Slider
+                              value={[voiceFilterMix]}
+                              onValueChange={(value) => setVoiceFilterMix(value[0])}
+                              min={0}
+                              max={100}
+                              step={5}
+                              disabled={applyingVoiceFilter}
+                              data-testid="slider-voice-filter-mix"
+                              className="w-full"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Control how much of the effect is applied to your voice
+                            </p>
+                          </div>
+                          <Button 
+                            size="lg" 
+                            variant="secondary" 
+                            onClick={handlePreviewVoiceEffect}
                             disabled={applyingVoiceFilter}
-                            data-testid="slider-voice-filter-mix"
                             className="w-full"
-                          />
+                            data-testid="button-preview-voice-effect"
+                          >
+                            {applyingVoiceFilter ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Generating Preview...
+                              </>
+                            ) : (
+                              <>
+                                <Volume2 className="h-4 w-4 mr-2" />
+                                Preview Voice Effect
+                              </>
+                            )}
+                          </Button>
+                        </>
+                      ) : (
+                        <div className="space-y-3 p-4 border rounded-lg bg-card">
+                          <h3 className="text-sm font-semibold">Preview: {selectedVoiceFilter.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} effect at {voiceFilterMix}% strength</h3>
+                          <audio 
+                            ref={voiceEffectAudioRef}
+                            controls 
+                            className="w-full"
+                            data-testid="audio-voice-effect-preview"
+                          >
+                            <source src={currentJob.metadata.voiceFilter.previewAudioPath} type="audio/mpeg" />
+                            Your browser does not support the audio tag.
+                          </audio>
                           <p className="text-xs text-muted-foreground">
-                            Control how much of the effect is applied to your voice
+                            Listen to the preview above. If you like it, click Apply to add it to your video.
                           </p>
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between">
+                              <label className="text-sm font-medium">Effect Strength</label>
+                              <span className="text-sm text-muted-foreground font-mono">{voiceFilterMix}%</span>
+                            </div>
+                            <Slider
+                              value={[voiceFilterMix]}
+                              onValueChange={(value) => setVoiceFilterMix(value[0])}
+                              min={0}
+                              max={100}
+                              step={5}
+                              disabled={applyingVoiceFilter}
+                              data-testid="slider-voice-filter-mix-preview"
+                              className="w-full"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              This strength will be applied when you add the effect to your video
+                            </p>
+                          </div>
+                          <div className="flex gap-3">
+                            <Button 
+                              size="lg" 
+                              onClick={handleApplyVoiceFilter}
+                              disabled={applyingVoiceFilter}
+                              className="flex-1"
+                              data-testid="button-apply-voice-effect"
+                            >
+                              {applyingVoiceFilter ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Applying to Video...
+                                </>
+                              ) : (
+                                <>
+                                  <Sparkles className="h-4 w-4 mr-2" />
+                                  Apply to Video
+                                </>
+                              )}
+                            </Button>
+                            <Button 
+                              size="lg"
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedVoiceFilter("concert_hall");
+                                queryClient.setQueryData(['/api/jobs', currentJob.id], {
+                                  ...currentJob,
+                                  metadata: {
+                                    ...currentJob.metadata,
+                                    voiceFilter: undefined
+                                  }
+                                });
+                              }}
+                              disabled={applyingVoiceFilter}
+                              className="flex-1"
+                              data-testid="button-try-different-effect"
+                            >
+                              <RotateCcw className="h-4 w-4 mr-2" />
+                              Try Different Effect
+                            </Button>
+                          </div>
                         </div>
-                        <Button 
-                          size="lg" 
-                          variant="secondary" 
-                          onClick={handleApplyVoiceFilter}
-                          disabled={applyingVoiceFilter}
-                          className="w-full"
-                          data-testid="button-apply-voice-filter"
-                        >
-                          {applyingVoiceFilter ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Applying Effect...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="h-4 w-4 mr-2" />
-                              Apply Voice Effect
-                            </>
-                          )}
-                        </Button>
+                      )}
                     </div>
                   </Card>
                 )}

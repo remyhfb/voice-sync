@@ -821,6 +821,144 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Preview Voice Effect - Generate 30-second audio preview before applying
+  app.post("/api/jobs/:jobId/preview-voice-effect", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      
+      const { applyVoiceFilterSchema } = await import("@shared/schema");
+      
+      const validationResult = applyVoiceFilterSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: validationResult.error.errors[0]?.message || "Invalid request" 
+        });
+      }
+      
+      const { preset, mix } = validationResult.data;
+      
+      const job = await storage.getProcessingJob(jobId);
+
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      if (job.status !== "completed") {
+        return res.status(400).json({ error: "Job must be completed before previewing voice effect" });
+      }
+
+      // Use ambient-enhanced video if available, otherwise use lip-synced video
+      const sourceVideoPath = job.metadata?.ambientEnhancement?.enhancedVideoPath || job.mergedVideoPath;
+
+      if (!sourceVideoPath) {
+        return res.status(400).json({ 
+          error: "No video file available to preview effect" 
+        });
+      }
+
+      res.json({ message: "Generating voice effect preview", jobId });
+
+      (async () => {
+        try {
+          logger.info(`Job:${jobId}`, "Generating voice effect preview", { preset, mix });
+          
+          let latestJob = await storage.getProcessingJob(jobId);
+          
+          await storage.updateProcessingJob(jobId, {
+            metadata: {
+              ...(latestJob?.metadata || {}),
+              voiceFilter: {
+                status: "processing",
+                preset,
+                mix
+              }
+            }
+          });
+
+          // Download video from object storage
+          const videoFile = await objectStorageService.getObjectEntityFile(sourceVideoPath);
+          const tempVideoPath = `/tmp/voice-preview-${jobId}-${Date.now()}.mp4`;
+          
+          await new Promise<void>((resolve, reject) => {
+            const writeStream = createWriteStream(tempVideoPath);
+            videoFile.createReadStream()
+              .on('error', reject)
+              .pipe(writeStream)
+              .on('finish', resolve)
+              .on('error', reject);
+          });
+
+          logger.info(`Job:${jobId}`, "Downloaded video for voice effect preview", { tempVideoPath });
+
+          // Generate preview audio
+          const tempPreviewPath = `/tmp/voice-preview-audio-${jobId}-${Date.now()}.mp3`;
+          await ffmpegService.generateVoiceEffectPreview(tempVideoPath, tempPreviewPath, {
+            preset,
+            mix
+          });
+
+          // Clean up temp video
+          await fs.unlink(tempVideoPath).catch(() => {});
+
+          // Upload preview audio to object storage
+          const uploadUrl = await objectStorageService.getObjectEntityUploadURL();
+          const audioBuffer = await fs.readFile(tempPreviewPath);
+          
+          await fetch(uploadUrl, {
+            method: 'PUT',
+            body: audioBuffer,
+            headers: {
+              'Content-Type': 'audio/mpeg',
+              'Content-Length': audioBuffer.length.toString(),
+            },
+          });
+
+          const urlParts = uploadUrl.split('?')[0].split('/');
+          const objectId = urlParts[urlParts.length - 1];
+          const previewAudioPath = `/objects/uploads/${objectId}`;
+
+          // Clean up temp preview file
+          await fs.unlink(tempPreviewPath).catch(() => {});
+
+          latestJob = await storage.getProcessingJob(jobId);
+          
+          await storage.updateProcessingJob(jobId, {
+            metadata: {
+              ...(latestJob?.metadata || {}),
+              voiceFilter: {
+                status: "completed" as const,
+                preset,
+                mix,
+                previewAudioPath
+              }
+            }
+          });
+
+          logger.info(`Job:${jobId}`, "Voice effect preview complete", { preset, mix });
+        } catch (error: any) {
+          logger.error(`Job:${jobId}`, "Voice effect preview failed", error);
+          
+          const latestJobError = await storage.getProcessingJob(jobId);
+          
+          await storage.updateProcessingJob(jobId, {
+            metadata: {
+              ...(latestJobError?.metadata || {}),
+              voiceFilter: {
+                status: "failed" as const,
+                preset,
+                mix,
+                errorMessage: error.message
+              }
+            }
+          });
+        }
+      })();
+    } catch (error: any) {
+      logger.error("Routes", "Error starting voice effect preview", error);
+      res.status(500).json({ error: error.message || "Failed to start voice effect preview" });
+    }
+  });
+
   // Voice Filter - Apply acoustic effects to voice audio
   app.post("/api/jobs/:jobId/apply-voice-filter", async (req, res) => {
     try {
