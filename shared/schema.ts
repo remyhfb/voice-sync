@@ -99,7 +99,7 @@ export const processingJobs = pgTable("processing_jobs", {
     };
     voiceFilter?: {
       status: "processing" | "completed" | "failed";
-      preset?: "concert_hall" | "small_room" | "cathedral" | "telephone" | "radio" | "stadium" | "outdoor" | "outdoor_pro";
+      preset?: VoiceFilterPreset;
       mix?: number; // 0-100, how much filter to apply
       previewAudioPath?: string;
       enhancedVideoPath?: string;
