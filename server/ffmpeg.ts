@@ -1040,4 +1040,153 @@ export class FFmpegService {
       });
     });
   }
+
+  /**
+   * Trim video by keeping only specified segments and concatenating them.
+   * Uses FFmpeg re-encoding for reliability (MVP approach).
+   */
+  async trimAndConcatVideo(
+    inputPath: string,
+    outputPath: string,
+    segments: Array<{ startTime: number; endTime: number }>
+  ): Promise<void> {
+    logger.info("FFmpeg", "Trimming video", { segments: segments.length });
+
+    // For single segment, use simple trim
+    if (segments.length === 1) {
+      const seg = segments[0];
+      return new Promise((resolve, reject) => {
+        const args = [
+          '-i', inputPath,
+          '-y',
+          '-ss', seg.startTime.toString(),
+          '-to', seg.endTime.toString(),
+          '-c:v', 'libx264',
+          '-preset', 'medium',
+          '-crf', '23',
+          '-c:a', 'aac',
+          '-b:a', '192k',
+          outputPath
+        ];
+
+        const ffmpegProcess = spawn(ffmpegInstaller.path, args);
+        let stderrOutput = '';
+
+        ffmpegProcess.stderr.on('data', (data) => {
+          stderrOutput += data.toString();
+        });
+
+        ffmpegProcess.on('close', (code) => {
+          if (code === 0) {
+            logger.info("FFmpeg", "Video trimmed successfully");
+            resolve();
+          } else {
+            logger.error("FFmpeg", "Trim failed", { code, stderr: stderrOutput.slice(-500) });
+            reject(new Error(`Failed to trim video: ffmpeg exited with code ${code}`));
+          }
+        });
+
+        ffmpegProcess.on('error', (err) => {
+          reject(new Error(`Failed to trim video: ${err.message}`));
+        });
+      });
+    }
+
+    // For multiple segments, extract each and concat
+    // Create temporary files for each segment
+    const tempDir = path.dirname(outputPath);
+    const tempSegments: string[] = [];
+    
+    try {
+      // Extract each segment
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        const tempPath = path.join(tempDir, `segment_${i}_${Date.now()}.mp4`);
+        tempSegments.push(tempPath);
+
+        await new Promise<void>((resolve, reject) => {
+          const args = [
+            '-i', inputPath,
+            '-y',
+            '-ss', seg.startTime.toString(),
+            '-to', seg.endTime.toString(),
+            '-c:v', 'libx264',
+            '-preset', 'medium',
+            '-crf', '23',
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            tempPath
+          ];
+
+          const ffmpegProcess = spawn(ffmpegInstaller.path, args);
+          let stderrOutput = '';
+
+          ffmpegProcess.stderr.on('data', (data) => {
+            stderrOutput += data.toString();
+          });
+
+          ffmpegProcess.on('close', (code) => {
+            if (code === 0) {
+              resolve();
+            } else {
+              reject(new Error(`Failed to extract segment ${i}: ffmpeg exited with code ${code}`));
+            }
+          });
+
+          ffmpegProcess.on('error', (err) => {
+            reject(new Error(`Failed to extract segment ${i}: ${err.message}`));
+          });
+        });
+      }
+
+      // Create concat file
+      const concatFilePath = path.join(tempDir, `concat_${Date.now()}.txt`);
+      const concatContent = tempSegments.map(p => `file '${p}'`).join('\n');
+      await fs.writeFile(concatFilePath, concatContent);
+
+      // Concatenate segments
+      await new Promise<void>((resolve, reject) => {
+        const args = [
+          '-f', 'concat',
+          '-safe', '0',
+          '-i', concatFilePath,
+          '-y',
+          '-c', 'copy',
+          outputPath
+        ];
+
+        const ffmpegProcess = spawn(ffmpegInstaller.path, args);
+        let stderrOutput = '';
+
+        ffmpegProcess.stderr.on('data', (data) => {
+          stderrOutput += data.toString();
+        });
+
+        ffmpegProcess.on('close', (code) => {
+          if (code === 0) {
+            logger.info("FFmpeg", "Segments concatenated successfully");
+            resolve();
+          } else {
+            logger.error("FFmpeg", "Concat failed", { code, stderr: stderrOutput.slice(-500) });
+            reject(new Error(`Failed to concatenate segments: ffmpeg exited with code ${code}`));
+          }
+        });
+
+        ffmpegProcess.on('error', (err) => {
+          reject(new Error(`Failed to concatenate segments: ${err.message}`));
+        });
+      });
+
+      // Cleanup temp files
+      await Promise.all([
+        ...tempSegments.map(p => fs.unlink(p).catch(() => {})),
+        fs.unlink(concatFilePath).catch(() => {})
+      ]);
+
+    } catch (error) {
+      // Cleanup on error
+      await Promise.all(tempSegments.map(p => fs.unlink(p).catch(() => {})));
+      throw error;
+    }
+  }
 }

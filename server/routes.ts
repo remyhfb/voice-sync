@@ -586,6 +586,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Trim video - Remove unwanted segments and concatenate remaining parts
+  app.post("/api/jobs/:jobId/trim", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      
+      const { trimVideoSchema } = await import("@shared/schema");
+      
+      const validationResult = trimVideoSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: validationResult.error.errors[0]?.message || "Invalid trim segments" 
+        });
+      }
+      
+      const { segments } = validationResult.data;
+      
+      const job = await storage.getProcessingJob(jobId);
+
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      if (!job.videoPath) {
+        return res.status(400).json({ error: "No video found for this job" });
+      }
+
+      res.json({ message: "Trimming video", jobId });
+
+      // Process trim asynchronously
+      (async () => {
+        try {
+          logger.info(`Job:${jobId}`, "Starting video trim", { segmentCount: segments.length });
+          
+          // Generate output path in temp directory
+          const outputPath = `/tmp/uploads/trimmed_${Date.now()}.mp4`;
+          
+          // Trim and concatenate video segments
+          await ffmpegService.trimAndConcatVideo(job.videoPath!, outputPath, segments);
+          
+          // Upload to object storage
+          const objectStorageService = new ObjectStorageService();
+          const uploadUrl = await objectStorageService.getObjectEntityUploadURL();
+          
+          const videoBuffer = await fs.readFile(outputPath);
+          await fetch(uploadUrl, {
+            method: 'PUT',
+            body: videoBuffer,
+            headers: { 'Content-Type': 'video/mp4' }
+          });
+          
+          const trimmedVideoPath = new URL(uploadUrl).pathname;
+          
+          // Update job metadata with trimmed video path
+          const latestJob = await storage.getProcessingJob(jobId);
+          await storage.updateProcessingJob(jobId, {
+            metadata: {
+              ...(latestJob?.metadata || {}),
+              trimmedVideoPath
+            }
+          });
+          
+          // Cleanup temp file
+          await fs.unlink(outputPath).catch(() => {});
+          
+          logger.info(`Job:${jobId}`, "Video trim complete", { trimmedVideoPath });
+        } catch (error: any) {
+          logger.error(`Job:${jobId}`, "Video trim failed", error);
+          
+          // Update job with error (but don't block other operations)
+          const latestJob = await storage.getProcessingJob(jobId);
+          await storage.updateProcessingJob(jobId, {
+            metadata: {
+              ...(latestJob?.metadata || {}),
+              errorMessage: error.message
+            }
+          });
+        }
+      })();
+    } catch (error: any) {
+      logger.error("Routes", "Error starting video trim", error);
+      res.status(500).json({ error: error.message || "Failed to start video trim" });
+    }
+  });
+
   // Preview Ambient Sound - Generate ONLY the audio for listening before committing
   app.post("/api/jobs/:jobId/preview-ambient", async (req, res) => {
     try {
