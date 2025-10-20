@@ -552,17 +552,40 @@ export default function CreatePage() {
                     <h2 className="text-xl font-semibold mb-2">Ambient Sound Enhanced Video</h2>
                     <p className="text-sm text-muted-foreground mb-3">
                       {currentJob.metadata.ambientEnhancement.customPrompt ? (
-                        <>Enhanced with custom ambient: "{currentJob.metadata.ambientEnhancement.customPrompt}"</>
+                        <>Enhanced with custom ambient: "{currentJob.metadata.ambientEnhancement.customPrompt}" at {currentJob.metadata.ambientEnhancement.volume}% volume</>
                       ) : (
-                        <>Enhanced with {currentJob.metadata.ambientEnhancement.preset || (currentJob.metadata.ambientEnhancement as any).ambientType || 'ambient'} ambience</>
+                        <>Enhanced with {currentJob.metadata.ambientEnhancement.preset || (currentJob.metadata.ambientEnhancement as any).ambientType || 'ambient'} ambience at {currentJob.metadata.ambientEnhancement.volume}% volume</>
                       )}
                     </p>
-                    <Button size="lg" asChild className="w-full">
-                      <a href={currentJob.metadata.ambientEnhancement.enhancedVideoPath} download data-testid="button-download-enhanced">
-                        <Download className="h-4 w-4 mr-2" />
-                        Download Enhanced Video
-                      </a>
-                    </Button>
+                    <div className="flex gap-3">
+                      <Button size="lg" asChild className="flex-1">
+                        <a href={currentJob.metadata.ambientEnhancement.enhancedVideoPath} download data-testid="button-download-enhanced">
+                          <Download className="h-4 w-4 mr-2" />
+                          Download Enhanced Video
+                        </a>
+                      </Button>
+                      <Button 
+                        size="lg" 
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedAmbientType("office");
+                          setCustomAmbientPrompt("");
+                          setAmbientVolume(15);
+                          queryClient.setQueryData(['/api/jobs', currentJob.id], {
+                            ...currentJob,
+                            metadata: {
+                              ...currentJob.metadata,
+                              ambientEnhancement: undefined
+                            }
+                          });
+                        }}
+                        className="flex-1"
+                        data-testid="button-try-different-enhanced"
+                      >
+                        <RotateCcw className="h-4 w-4 mr-2" />
+                        Try Different Ambient
+                      </Button>
+                    </div>
                   </Card>
                 )}
 

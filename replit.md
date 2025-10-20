@@ -72,6 +72,7 @@ A simplified optional feature that adds professional ambient atmosphere to the f
 - Polling updates status every 3 seconds until completion
 - Enhanced video becomes available for download alongside original result
 - Completion message shows which preset or custom prompt was used and the applied volume
+- **Iteration Support**: After enhanced video is ready, "Try Different Ambient" button allows users to reset and experiment with different presets, prompts, or volumes without reprocessing the lip-sync
 
 ## External Dependencies
 
