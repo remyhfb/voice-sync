@@ -95,6 +95,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Upload video only - creates job without processing (for video editor)
+  app.post("/api/jobs/upload-video", upload.single("video"), async (req, res) => {
+    try {
+      const videoFile = req.file;
+      
+      if (!videoFile) {
+        return res.status(400).json({ error: "Video file required" });
+      }
+
+      const videoMetadata = await ffmpegService.getVideoMetadata(videoFile.path);
+      
+      const job = await storage.createProcessingJob({
+        type: "lipsync",
+        status: "pending",
+        progress: 0,
+        videoPath: videoFile.path,
+        metadata: {
+          videoFileName: videoFile.originalname,
+          videoDuration: videoMetadata.duration,
+          videoSize: videoMetadata.size,
+        },
+      });
+
+      // Upload to object storage for access in editor
+      logger.info(`Job:${job.id}`, "Uploading video to object storage");
+      const objectStorageServiceInit = new ObjectStorageService();
+      const videoUploadUrl = await objectStorageServiceInit.getObjectEntityUploadURL();
+      const videoBuffer = await fs.readFile(videoFile.path);
+      const videoStats = await fs.stat(videoFile.path);
+      
+      await fetch(videoUploadUrl, {
+        method: 'PUT',
+        body: videoBuffer,
+        headers: {
+          'Content-Type': 'video/mp4',
+          'Content-Length': videoStats.size.toString(),
+        },
+      });
+
+      const urlParts = videoUploadUrl.split('?')[0].split('/');
+      const objectId = urlParts[urlParts.length - 1];
+      const originalVideoPath = `/objects/uploads/${objectId}`;
+
+      await storage.updateProcessingJob(job.id, {
+        metadata: {
+          ...job.metadata,
+          originalVideoPath
+        }
+      });
+
+      res.json({ ...job, metadata: { ...job.metadata, originalVideoPath } });
+    } catch (error) {
+      logger.error("Jobs", "Error uploading video", error as Error);
+      res.status(500).json({ error: "Failed to upload video" });
+    }
+  });
+
+  // Get signed download URL for job's active video (trimmed or original)
+  app.get("/api/jobs/:jobId/download-video-url", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const job = await storage.getProcessingJob(jobId);
+      
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const videoPath = job.metadata?.trimmedVideoPath || job.metadata?.originalVideoPath;
+      if (!videoPath) {
+        return res.status(404).json({ error: "No video available for this job" });
+      }
+
+      // Extract full object path from /objects/uploads/<id> -> uploads/<id>
+      const pathParts = videoPath.split('/');
+      const uploadsIndex = pathParts.indexOf('uploads');
+      if (uploadsIndex === -1 || uploadsIndex === pathParts.length - 1) {
+        return res.status(500).json({ error: "Invalid video path format" });
+      }
+      
+      const objectPath = pathParts.slice(uploadsIndex).join('/'); // uploads/<id>
+
+      // Generate signed URL with full object path
+      const objectStorageService = new ObjectStorageService();
+      const signedUrl = await objectStorageService.getSignedReadURL(
+        `https://storage.googleapis.com/${process.env.BUCKET_ID}/${objectPath}`,
+        3600 // 1 hour TTL
+      );
+
+      res.json({ downloadUrl: signedUrl });
+    } catch (error) {
+      logger.error("Jobs", "Error generating download URL", error as Error);
+      res.status(500).json({ error: "Failed to generate download URL" });
+    }
+  });
+
   // Lip-sync pipeline: Time-stretch VEO video to match user audio + Sync Labs lip-sync
   app.post("/api/jobs/process-lipsync", upload.fields([
     { name: "video", maxCount: 1 },
@@ -105,24 +200,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const videoFile = files.video?.[0];
       const audioFile = files.audio?.[0];
 
-      if (!videoFile || !audioFile) {
-        return res.status(400).json({ error: "Both VEO video and user audio required" });
-      }
-
-      const videoMetadata = await ffmpegService.getVideoMetadata(videoFile.path);
+      // Check if we're reusing an existing job (after editing)
+      const existingJobId = req.body.jobId;
+      let job: any;
+      let localVideoPath: string;
+      let localAudioPath: string;
       
-      const job = await storage.createProcessingJob({
-        type: "lipsync",
-        status: "processing",
-        progress: 0,
-        videoPath: videoFile.path,
-        metadata: {
-          videoFileName: videoFile.originalname,
-          audioFileName: audioFile.originalname,
-          videoDuration: videoMetadata.duration,
-          videoSize: videoMetadata.size,
-        },
-      });
+      if (existingJobId) {
+        // Reuse existing job (after editing) - download video from object storage
+        if (!audioFile) {
+          return res.status(400).json({ error: "Audio file required" });
+        }
+        
+        // Capture audio path for closure
+        localAudioPath = audioFile.path;
+        
+        job = await storage.getProcessingJob(existingJobId);
+        if (!job) {
+          return res.status(404).json({ error: "Job not found" });
+        }
+        
+        // Get active video path (trimmed if available, otherwise original)
+        const activeVideoPath = job.metadata?.trimmedVideoPath || job.metadata?.originalVideoPath;
+        if (!activeVideoPath) {
+          return res.status(400).json({ error: "No video available for this job" });
+        }
+        
+        // Download video from object storage to temp file
+        logger.info(`Job:${existingJobId}`, `Downloading video from object storage: ${activeVideoPath}`);
+        const pathParts = activeVideoPath.split('/');
+        const uploadsIndex = pathParts.indexOf('uploads');
+        const objectPath = pathParts.slice(uploadsIndex).join('/');
+        
+        const objectStorageService = new ObjectStorageService();
+        const signedUrl = await objectStorageService.getSignedReadURL(
+          `https://storage.googleapis.com/${process.env.BUCKET_ID}/${objectPath}`,
+          3600
+        );
+        
+        const videoResponse = await fetch(signedUrl);
+        if (!videoResponse.ok) {
+          throw new Error(`Failed to download video from storage: ${videoResponse.statusText}`);
+        }
+        
+        const videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
+        localVideoPath = `/tmp/uploads/${existingJobId}_downloaded.mp4`;
+        await fs.writeFile(localVideoPath, videoBuffer);
+        
+        logger.info(`Job:${existingJobId}`, `Video downloaded to: ${localVideoPath}`);
+        
+        // Update job to processing status
+        await storage.updateProcessingJob(existingJobId, {
+          status: "processing",
+          progress: 0,
+          videoPath: localVideoPath,
+          metadata: {
+            ...job.metadata,
+            audioFileName: audioFile.originalname,
+          },
+        });
+        
+        job = await storage.getProcessingJob(existingJobId);
+      } else {
+        // Create new job (normal flow)
+        if (!videoFile || !audioFile) {
+          return res.status(400).json({ error: "Both VEO video and user audio required" });
+        }
+        
+        // Capture paths for closure
+        localVideoPath = videoFile.path;
+        localAudioPath = audioFile.path;
+        
+        const videoMetadata = await ffmpegService.getVideoMetadata(localVideoPath);
+        
+        job = await storage.createProcessingJob({
+          type: "lipsync",
+          status: "processing",
+          progress: 0,
+          videoPath: localVideoPath,
+          metadata: {
+            videoFileName: videoFile.originalname,
+            audioFileName: audioFile.originalname,
+            videoDuration: videoMetadata.duration,
+            videoSize: videoMetadata.size,
+          },
+        });
+      }
 
       res.json(job);
 
@@ -138,46 +301,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let currentMetadata = { ...job.metadata };
         
         try {
-          // Step 0.5: Upload original VEO video to object storage for future sound regeneration
-          logger.info(`Job:${job.id}`, "Uploading original VEO video to object storage");
-          const objectStorageServiceInit = new ObjectStorageService();
-          const originalVideoUploadUrl = await objectStorageServiceInit.getObjectEntityUploadURL();
-          const originalVideoBuffer = await fs.readFile(videoFile.path);
-          const originalVideoStats = await fs.stat(videoFile.path);
-          
-          await fetch(originalVideoUploadUrl, {
-            method: 'PUT',
-            body: originalVideoBuffer,
-            headers: {
-              'Content-Type': 'video/mp4',
-              'Content-Length': originalVideoStats.size.toString(),
-            },
-          });
+          // Step 0.5: Upload original VEO video to object storage if not already uploaded
+          if (!currentMetadata.originalVideoPath) {
+            logger.info(`Job:${job.id}`, "Uploading original VEO video to object storage");
+            const objectStorageServiceInit = new ObjectStorageService();
+            const originalVideoUploadUrl = await objectStorageServiceInit.getObjectEntityUploadURL();
+            const originalVideoBuffer = await fs.readFile(localVideoPath);
+            const originalVideoStats = await fs.stat(localVideoPath);
+            
+            await fetch(originalVideoUploadUrl, {
+              method: 'PUT',
+              body: originalVideoBuffer,
+              headers: {
+                'Content-Type': 'video/mp4',
+                'Content-Length': originalVideoStats.size.toString(),
+              },
+            });
 
-          const originalUrlParts = originalVideoUploadUrl.split('?')[0].split('/');
-          const originalObjectId = originalUrlParts[originalUrlParts.length - 1];
-          const originalVideoPath = `/objects/uploads/${originalObjectId}`;
+            const originalUrlParts = originalVideoUploadUrl.split('?')[0].split('/');
+            const originalObjectId = originalUrlParts[originalUrlParts.length - 1];
+            const originalVideoPath = `/objects/uploads/${originalObjectId}`;
 
-          // Update mutable metadata with spread to ensure type safety
-          currentMetadata = {
-            ...currentMetadata,
-            originalVideoPath
-          };
-          
-          // Store original video path in metadata
-          await storage.updateProcessingJob(job.id, {
-            metadata: currentMetadata
-          });
+            // Update mutable metadata with spread to ensure type safety
+            currentMetadata = {
+              ...currentMetadata,
+              originalVideoPath
+            };
+            
+            // Store original video path in metadata
+            await storage.updateProcessingJob(job.id, {
+              metadata: currentMetadata
+            });
+          } else {
+            logger.info(`Job:${job.id}`, "Using existing original video from object storage");
+          }
 
           // Step 1: Extract VEO audio (0-10%)
           logger.info(`Job:${job.id}`, "Extracting VEO audio for transcription");
-          await ffmpegService.extractAudio(videoFile.path, veoAudioPath);
+          await ffmpegService.extractAudio(localVideoPath, veoAudioPath);
           await storage.updateProcessingJob(job.id, { progress: 10 });
 
           // Step 2: Clean user audio with ElevenLabs (10-20%)
           logger.info(`Job:${job.id}`, "Cleaning user audio with ElevenLabs");
           const elevenlabs = new ElevenLabsService();
-          const cleanedBuffer = await elevenlabs.isolateVoice(audioFile.path);
+          const cleanedBuffer = await elevenlabs.isolateVoice(localAudioPath);
           await fs.writeFile(cleanedUserAudioPath, cleanedBuffer);
           await storage.updateProcessingJob(job.id, { progress: 15 });
 
@@ -467,8 +634,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         } finally {
           // Cleanup temp files
-          await fs.unlink(videoFile.path).catch(() => {});
-          await fs.unlink(audioFile.path).catch(() => {});
+          await fs.unlink(localVideoPath).catch(() => {});
+          await fs.unlink(localAudioPath).catch(() => {});
           await fs.unlink(veoAudioPath).catch(() => {});
           await fs.unlink(cleanedUserAudioPath).catch(() => {});
           await fs.unlink(`/tmp/uploads/${job.id}_trimmed_user.mp3`).catch(() => {});

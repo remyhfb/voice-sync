@@ -71,6 +71,40 @@ export default function CreatePage() {
   // Note: voiceFilterMix controls the wet/dry blend in FFmpeg, NOT the HTML audio volume
   // The preview audio should always play at full volume so users can hear the effect clearly
 
+  const uploadVideoMutation = useMutation({
+    mutationFn: async (data: { videoFile: File }) => {
+      const formData = new FormData();
+      formData.append("video", data.videoFile);
+
+      const response = await fetch("/api/jobs/upload-video", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Failed to upload" }));
+        throw new Error(errorData.error || "Failed to upload video");
+      }
+
+      return response.json();
+    },
+    onSuccess: (job: ProcessingJob) => {
+      setCurrentJobId(job.id);
+      setLocation(`/edit/${job.id}`);
+      toast({
+        title: "Video uploaded",
+        description: "You can now trim your video or skip to processing",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to upload video",
+        variant: "destructive",
+      });
+    },
+  });
+
   const processVideoMutation = useMutation({
     mutationFn: async (data: { videoFile: File; audioFile: File }) => {
       const formData = new FormData();
@@ -118,7 +152,66 @@ export default function CreatePage() {
     }
   };
 
-  const handleStartProcessing = () => {
+  const handleEditVideo = () => {
+    if (!videoFile) {
+      toast({
+        title: "Missing video",
+        description: "Please upload a video file first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    uploadVideoMutation.mutate({
+      videoFile,
+    });
+  };
+
+  const handleStartProcessing = async () => {
+    // If we have a currentJob (after editing), just send audio + jobId
+    if (currentJob && currentJob.metadata?.originalVideoPath) {
+      if (!audioFile) {
+        toast({
+          title: "Missing audio",
+          description: "Please upload your audio recording",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      try {
+        // Send audio file and jobId - backend will download video from object storage
+        const formData = new FormData();
+        formData.append("audio", audioFile);
+        formData.append("jobId", currentJob.id);
+        
+        const response = await fetch("/api/jobs/process-lipsync", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: "Failed to process" }));
+          throw new Error(errorData.error || "Failed to start processing");
+        }
+
+        const job = await response.json();
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+        toast({
+          title: "Processing started",
+          description: "Your edited video is being processed with AI lip-sync technology",
+        });
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "Failed to process video",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
+    // Normal flow: upload both files
     if (!videoFile || !audioFile) {
       toast({
         title: "Missing files",
@@ -673,25 +766,41 @@ export default function CreatePage() {
               </div>
             </div>
 
-            <div className="mt-8 flex items-center justify-between gap-4">
+            <div className="mt-8 space-y-4">
               <p className="text-sm text-muted-foreground">
                 AI-powered lip-sync with perfect timing preservation
               </p>
-              <Button
-                data-testid="button-start-processing"
-                size="lg"
-                onClick={handleStartProcessing}
-                disabled={!videoFile || !audioFile || processVideoMutation.isPending}
-                className="min-w-[200px]"
-              >
-                {processVideoMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {processVideoMutation.isPending ? "Starting..." : (
-                  <>
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    Start Processing
-                  </>
-                )}
-              </Button>
+              <div className="flex items-center gap-3">
+                <Button
+                  data-testid="button-edit-video"
+                  size="lg"
+                  variant="outline"
+                  onClick={handleEditVideo}
+                  disabled={!videoFile || uploadVideoMutation.isPending || processVideoMutation.isPending}
+                  className="flex-1"
+                >
+                  {uploadVideoMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {uploadVideoMutation.isPending ? "Uploading..." : "Edit Video First"}
+                </Button>
+                <Button
+                  data-testid="button-start-processing"
+                  size="lg"
+                  onClick={handleStartProcessing}
+                  disabled={!videoFile || !audioFile || processVideoMutation.isPending || uploadVideoMutation.isPending}
+                  className="flex-1"
+                >
+                  {processVideoMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {processVideoMutation.isPending ? "Starting..." : (
+                    <>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Start Processing
+                    </>
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Optional: Edit your video to remove unwanted segments before processing
+              </p>
             </div>
           </Card>
         )}
