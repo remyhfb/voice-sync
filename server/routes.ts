@@ -281,6 +281,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         
         job = await storage.getProcessingJob(existingJobId);
+        logger.info(`Job:${existingJobId}`, `Refetched job - videoPath: ${job?.videoPath}`);
       } else {
         // Create new job (normal flow)
         if (!videoFile || !audioFile) {
@@ -440,6 +441,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Use the job's videoPath directly (which is the local downloaded file for edited jobs)
           const activeVideoPath = job.videoPath;
+          logger.info(`Job:${job.id}`, `Using activeVideoPath for time-stretch: ${activeVideoPath}`);
           if (!activeVideoPath) {
             throw new Error("No video path available");
           }
