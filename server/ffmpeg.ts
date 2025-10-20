@@ -568,4 +568,89 @@ export class FFmpegService {
         .run();
     });
   }
+
+  /**
+   * Apply voice filter effect to video audio
+   */
+  async applyVoiceFilter(
+    videoPath: string,
+    outputPath: string,
+    options: {
+      preset: "concert_hall" | "small_room" | "cathedral" | "telephone" | "radio" | "stadium";
+      mix: number; // 0-100, how much effect to apply
+    }
+  ): Promise<void> {
+    const { preset, mix } = options;
+    const mixDecimal = mix / 100; // Convert to 0-1 range
+
+    logger.debug("FFmpeg", "Applying voice filter", {
+      video: path.basename(videoPath),
+      preset,
+      mix
+    });
+
+    // Define filter chains for each preset
+    let audioFilter: string;
+    
+    switch (preset) {
+      case "concert_hall":
+        // Large reverb with long tail
+        audioFilter = `aecho=0.8:0.9:1000|1800:0.3|0.25`;
+        break;
+      
+      case "cathedral":
+        // Very large reverb with very long tail
+        audioFilter = `aecho=0.8:0.9:1500|2500|3500:0.4|0.3|0.2`;
+        break;
+      
+      case "small_room":
+        // Short, tight reverb
+        audioFilter = `aecho=0.8:0.88:60|122:0.4|0.3`;
+        break;
+      
+      case "stadium":
+        // Medium-long reverb with some early reflections
+        audioFilter = `aecho=0.8:0.9:500|1000|2000:0.35|0.3|0.25`;
+        break;
+      
+      case "telephone":
+        // Band-pass filter (300Hz - 3400Hz, typical telephone range)
+        audioFilter = `highpass=f=300,lowpass=f=3400`;
+        break;
+      
+      case "radio":
+        // Band-pass with slight resonance (like AM radio)
+        audioFilter = `highpass=f=200,lowpass=f=5000,equalizer=f=2500:width=1000:g=3`;
+        break;
+      
+      default:
+        throw new Error(`Unknown voice filter preset: ${preset}`);
+    }
+
+    // Apply filter with mix control
+    // Split audio -> apply filter to one copy -> mix wet/dry
+    const filterComplex = `[0:a]asplit=2[dry][wet]; [wet]${audioFilter}[filtered]; [dry][filtered]amix=inputs=2:weights=${1-mixDecimal} ${mixDecimal}:normalize=0[aout]`;
+
+    return new Promise((resolve, reject) => {
+      ffmpeg()
+        .input(videoPath)
+        .complexFilter(filterComplex)
+        .outputOptions([
+          '-map', '0:v',      // Use video from input
+          '-map', '[aout]',   // Use filtered+mixed audio
+          '-c:v', 'copy',     // Copy video codec (no re-encode)
+          '-c:a', 'aac',      // Encode audio as AAC
+          '-b:a', '192k'      // Audio bitrate
+        ])
+        .output(outputPath)
+        .on("end", () => {
+          logger.info("FFmpeg", "Voice filter applied", { preset, mix });
+          resolve();
+        })
+        .on("error", (err: any) => {
+          reject(new Error(`FFmpeg voice filter error: ${err.message}`));
+        })
+        .run();
+    });
+  }
 }

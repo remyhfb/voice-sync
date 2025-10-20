@@ -821,6 +821,153 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Voice Filter - Apply acoustic effects to voice audio
+  app.post("/api/jobs/:jobId/apply-voice-filter", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      
+      // Import schema for validation
+      const { applyVoiceFilterSchema } = await import("@shared/schema");
+      
+      // Validate request body
+      const validationResult = applyVoiceFilterSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: validationResult.error.errors[0]?.message || "Invalid request" 
+        });
+      }
+      
+      const { preset, mix } = validationResult.data;
+      
+      const job = await storage.getProcessingJob(jobId);
+
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      if (job.status !== "completed") {
+        return res.status(400).json({ error: "Job must be completed before applying voice filter" });
+      }
+
+      // Use ambient-enhanced video if available, otherwise use lip-synced video
+      const sourceVideoPath = job.metadata?.ambientEnhancement?.enhancedVideoPath || job.mergedVideoPath;
+
+      if (!sourceVideoPath) {
+        return res.status(400).json({ 
+          error: "No video file available to apply filter" 
+        });
+      }
+
+      // Return immediately - filter runs in background
+      res.json({ message: "Voice filter processing started", jobId });
+
+      // Run filter asynchronously
+      (async () => {
+        try {
+          const { ffmpegService } = await import("./ffmpeg");
+          
+          logger.info(`Job:${jobId}`, "Starting voice filter application", { preset, mix });
+          
+          // Re-fetch latest job to preserve all metadata
+          let latestJob = await storage.getProcessingJob(jobId);
+          
+          // Update status to processing
+          await storage.updateProcessingJob(jobId, {
+            metadata: {
+              ...(latestJob?.metadata || {}),
+              voiceFilter: {
+                status: "processing",
+                preset,
+                mix
+              }
+            }
+          });
+
+          // Download video from object storage to temp file
+          const videoFile = await objectStorageService.getObjectEntityFile(sourceVideoPath);
+          const tempVideoPath = `/tmp/voicefilter-${jobId}-${Date.now()}.mp4`;
+          
+          await new Promise<void>((resolve, reject) => {
+            const writeStream = createWriteStream(tempVideoPath);
+            videoFile.createReadStream()
+              .on('error', reject)
+              .pipe(writeStream)
+              .on('finish', resolve)
+              .on('error', reject);
+          });
+
+          logger.info(`Job:${jobId}`, "Downloaded video for voice filter", { tempVideoPath });
+
+          // Apply voice filter
+          const outputVideoPath = `/tmp/voicefiltered-${jobId}-${Date.now()}.mp4`;
+          await ffmpegService.applyVoiceFilter(tempVideoPath, outputVideoPath, { preset, mix });
+
+          // Clean up temp input video file
+          await fs.unlink(tempVideoPath).catch(() => {});
+
+          // Upload filtered video to object storage
+          const uploadUrl = await objectStorageService.getObjectEntityUploadURL();
+          const videoBuffer = await fs.readFile(outputVideoPath);
+          
+          await fetch(uploadUrl, {
+            method: 'PUT',
+            body: videoBuffer,
+            headers: {
+              'Content-Type': 'video/mp4',
+              'Content-Length': videoBuffer.length.toString(),
+            },
+          });
+
+          const urlParts = uploadUrl.split('?')[0].split('/');
+          const objectId = urlParts[urlParts.length - 1];
+          const enhancedVideoPath = `/objects/uploads/${objectId}`;
+
+          // Clean up temp output video file
+          await fs.unlink(outputVideoPath).catch(() => {});
+
+          // Re-fetch latest job to preserve all metadata
+          latestJob = await storage.getProcessingJob(jobId);
+          
+          // Store results in metadata
+          await storage.updateProcessingJob(jobId, {
+            metadata: {
+              ...(latestJob?.metadata || {}),
+              voiceFilter: {
+                status: "completed" as const,
+                preset,
+                mix,
+                enhancedVideoPath
+              }
+            }
+          });
+
+          logger.info(`Job:${jobId}`, "Voice filter application complete", { preset, mix });
+        } catch (error: any) {
+          logger.error(`Job:${jobId}`, "Voice filter application failed", error);
+          
+          // Re-fetch latest job to preserve all metadata
+          const latestJobError = await storage.getProcessingJob(jobId);
+          
+          // Update with error status
+          await storage.updateProcessingJob(jobId, {
+            metadata: {
+              ...(latestJobError?.metadata || {}),
+              voiceFilter: {
+                status: "failed" as const,
+                preset,
+                mix,
+                errorMessage: error.message
+              }
+            }
+          });
+        }
+      })();
+    } catch (error: any) {
+      logger.error("Routes", "Error starting voice filter", error);
+      res.status(500).json({ error: error.message || "Failed to start voice filter" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
