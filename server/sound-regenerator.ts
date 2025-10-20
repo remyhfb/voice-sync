@@ -36,17 +36,19 @@ export class SoundRegenerator {
   /**
    * Simple ambient sound enhancement:
    * 1. Generate ambient sound using ElevenLabs (from preset or custom prompt)
-   * 2. Mix it with the lip-synced video at low volume
+   * 2. Mix it with the lip-synced video at specified volume
    */
   async enhanceWithAmbient(
     lipsyncedVideoPath: string,
     preset?: AmbientType,
     customPrompt?: string,
-    outputDir: string = '/tmp/sound-design'
+    outputDir: string = '/tmp/sound-design',
+    volumePercentage: number = 15
   ): Promise<SoundDesignResult> {
     logger.info('SoundRegenerator', 'Starting ambient sound enhancement', {
       preset,
       customPrompt,
+      volumePercentage,
       videoPath: path.basename(lipsyncedVideoPath)
     });
 
@@ -81,17 +83,21 @@ export class SoundRegenerator {
         path: path.basename(ambientAudioPath) 
       });
 
-      // Step 2: Mix ambient sound with video at low volume (15% ambient, 100% original)
-      logger.info('SoundRegenerator', 'Mixing ambient sound with video');
+      // Step 2: Mix ambient sound with video at specified volume
+      const ambientVolumeDecimal = volumePercentage / 100;
+      logger.info('SoundRegenerator', 'Mixing ambient sound with video', { 
+        volumePercentage, 
+        ambientVolumeDecimal 
+      });
       
       await this.ffmpeg.mixAudioWithVideo(
         lipsyncedVideoPath,
         ambientAudioPath,
         enhancedVideoPath,
         {
-          loop: duration > 30, // Loop if video is longer than ambient
-          videoVolume: 1.0,    // Keep original audio at full volume
-          ambientVolume: 0.15  // Ambient at 15% for subtle background
+          loop: duration > 30,         // Loop if video is longer than ambient
+          videoVolume: 1.0,            // Keep original audio at full volume
+          ambientVolume: ambientVolumeDecimal  // User-selected ambient volume
         }
       );
 
