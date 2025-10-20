@@ -103,7 +103,12 @@ The system offers two outdoor presets for A/B testing:
 - **Outdoor (Experimental)**: 30-80ms delay, 100Hz-12kHz filtering - more subtle, brighter sound
 - **Outdoors - Pro**: 70-100ms delay, 400Hz-2.5kHz filtering - follows professional audio engineering research with aggressive high-frequency rolloff for authentic outdoor air absorption and mid-range focus
 
-**API Endpoint:**
+**API Endpoints:**
+- `POST /api/jobs/:jobId/preview-voice-effect`
+  - Request body: `{ preset: string, mix: number }`
+  - Generates 30-second audio preview with effect applied
+  - Stores preview in object storage
+  - Updates job metadata with status and previewAudioPath
 - `POST /api/jobs/:jobId/apply-voice-filter`
   - Request body: `{ preset: string, mix: number }`
   - Preset validation: Must be one of the 8 available presets
@@ -115,8 +120,10 @@ The system offers two outdoor presets for A/B testing:
 - After successful lip-sync completion (with or without ambient enhancement), user sees:
   - Preset selector dropdown (8 options)
   - Effect strength slider (0-100%, default 50%)
-- **Apply Workflow**: User selects preset and adjusts strength → clicks "Apply Voice Effect" → system processes video with selected effect
-- Polling updates status every 3 seconds until completion
+- **Preview Workflow (Optional)**: User selects preset and adjusts strength → clicks "Preview Voice Effect" → hears 30-second audio sample → audio player displays at full volume regardless of strength slider
+- **Apply Workflow**: User adjusts strength slider to desired level → clicks "Apply to Video" → system processes video with selected effect at current slider strength
+- Preview audio always plays at full volume so users can hear the effect clearly; strength slider only controls FFmpeg wet/dry blend
+- Polling updates status every 3 seconds with 2-minute timeout until completion
 - Video with effect becomes available for download alongside other results
 - **Iteration Support**: After video with effect is ready, "Try Different Effect" button allows users to reset and experiment with different presets or strength levels without reprocessing the lip-sync
 
