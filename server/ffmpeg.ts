@@ -3,6 +3,7 @@ import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import ffprobeInstaller from "@ffprobe-installer/ffprobe";
 import { promises as fs } from "fs";
 import path from "path";
+import { spawn } from "child_process";
 import { logger } from "./logger";
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
@@ -571,6 +572,7 @@ export class FFmpegService {
 
   /**
    * Apply voice filter effect to video audio
+   * Uses spawn directly instead of fluent-ffmpeg to properly handle filter_complex quoting
    */
   async applyVoiceFilter(
     videoPath: string,
@@ -633,34 +635,55 @@ export class FFmpegService {
     const wetWeight = mixDecimal.toFixed(2);
     
     // Source: https://ffmpeg.org/ffmpeg-filters.html#amix
-    // Pass as single string - fluent-ffmpeg will quote it properly
-    const filterComplex = `[0:a]asplit=2[dry][wet];[wet]${audioFilter}[wet_processed];[dry][wet_processed]amix=inputs=2:weights='${dryWeight} ${wetWeight}':normalize=0[aout]`;
+    // Note: 'normalize' option doesn't exist in this FFmpeg version, removed
+    const filterComplex = `[0:a]asplit=2[dry][wet];[wet]${audioFilter}[wet_processed];[dry][wet_processed]amix=inputs=2:weights='${dryWeight} ${wetWeight}'[aout]`;
 
     logger.debug("FFmpeg", "Filter complex", { filterComplex, audioFilter });
 
+    // Use spawn directly to properly handle filter_complex quoting
+    // fluent-ffmpeg doesn't quote the parameter correctly, causing shell parsing errors
     return new Promise((resolve, reject) => {
-      ffmpeg()
-        .input(videoPath)
-        .complexFilter(filterComplex, 'aout')  // Map output stream per docs
-        .outputOptions([
-          '-map', '0:v',      // Use video from input
-          // complexFilter's second param handles audio mapping
-          '-c:v', 'copy',     // Copy video codec (no re-encode)
-          '-c:a', 'aac',      // Encode audio as AAC
-          '-b:a', '192k'      // Audio bitrate
-        ])
-        .output(outputPath)
-        .on("start", (commandLine: string) => {
-          logger.debug("FFmpeg", "Voice filter command", { commandLine });
-        })
-        .on("end", () => {
+      const args = [
+        '-i', videoPath,
+        '-y',
+        '-filter_complex', filterComplex,
+        '-map', '0:v',
+        '-map', '[aout]',
+        '-c:v', 'copy',
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        outputPath
+      ];
+
+      logger.debug("FFmpeg", "Voice filter command args", { 
+        ffmpegPath: ffmpegInstaller.path,
+        args 
+      });
+
+      const ffmpegProcess = spawn(ffmpegInstaller.path, args);
+      
+      let stderrOutput = '';
+
+      ffmpegProcess.stderr.on('data', (data) => {
+        stderrOutput += data.toString();
+      });
+
+      ffmpegProcess.on('close', (code) => {
+        if (code === 0) {
           logger.info("FFmpeg", "Voice filter applied", { preset, mix });
           resolve();
-        })
-        .on("error", (err: any) => {
-          reject(new Error(`FFmpeg voice filter error: ${err.message}`));
-        })
-        .run();
+        } else {
+          logger.error("FFmpeg", "Voice filter failed", { 
+            code, 
+            stderr: stderrOutput.slice(-500) // Last 500 chars
+          });
+          reject(new Error(`FFmpeg voice filter error: ffmpeg exited with code ${code}`));
+        }
+      });
+
+      ffmpegProcess.on('error', (err) => {
+        reject(new Error(`FFmpeg voice filter error: ${err.message}`));
+      });
     });
   }
 }

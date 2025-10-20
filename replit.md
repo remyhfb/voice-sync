@@ -94,6 +94,7 @@ An optional feature that applies acoustic effects to the voice audio using FFmpe
 - **Mix Control**: User-adjustable slider (0-100%) controls wet/dry mix - 0% = original voice, 100% = full effect
 - **No External API**: All processing server-side using FFmpeg built-in filters
 - **Applies to Best Available Video**: Uses ambient-enhanced video if available, otherwise uses lip-synced video
+- **Implementation Note**: Uses `child_process.spawn()` directly instead of fluent-ffmpeg to ensure proper argument escaping for complex filter chains. The amix filter uses `weights` parameter only (normalize option not available in this FFmpeg version).
 
 **API Endpoint:**
 - `POST /api/jobs/:jobId/apply-voice-filter`
