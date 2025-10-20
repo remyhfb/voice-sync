@@ -931,6 +931,7 @@ export default function CreatePage() {
                               <SelectItem value="cathedral" data-testid="option-cathedral">Cathedral</SelectItem>
                               <SelectItem value="stadium" data-testid="option-stadium">Stadium</SelectItem>
                               <SelectItem value="outdoor" data-testid="option-outdoor">Outdoor</SelectItem>
+                              <SelectItem value="outdoor_pro" data-testid="option-outdoor-pro">Outdoors - Pro</SelectItem>
                               <SelectItem value="telephone" data-testid="option-telephone">Telephone</SelectItem>
                               <SelectItem value="radio" data-testid="option-radio">Radio</SelectItem>
                             </SelectContent>

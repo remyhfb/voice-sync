@@ -86,7 +86,8 @@ An optional feature that applies acoustic effects to the voice audio using FFmpe
 - **Small Room**: Short, tight reverb for intimate acoustic
 - **Cathedral**: Very large reverb with very long tail for massive space
 - **Stadium**: Medium-long reverb with early reflections for arena sound
-- **Outdoor**: Minimal reverb with high-frequency rolloff for open air ambience
+- **Outdoor**: Minimal reverb with high-frequency rolloff for open air ambience (experimental)
+- **Outdoors - Pro**: Professional outdoor acoustic based on audio engineering standards (70-100ms pre-delay, 400Hz HPF, 2.5kHz LPF for authentic air absorption)
 - **Telephone**: Band-pass filter (300Hz - 3400Hz) for classic phone effect
 - **Radio**: Band-pass with resonance (200Hz - 5000Hz) for AM radio sound
 
@@ -97,17 +98,22 @@ An optional feature that applies acoustic effects to the voice audio using FFmpe
 - **Applies to Best Available Video**: Uses ambient-enhanced video if available, otherwise uses lip-synced video
 - **Implementation Note**: Uses `child_process.spawn()` directly instead of fluent-ffmpeg to ensure proper argument escaping for complex filter chains. The amix filter uses `weights` parameter only (normalize option not available in this FFmpeg version).
 
+**Outdoor Effect Comparison:**
+The system offers two outdoor presets for A/B testing:
+- **Outdoor (Experimental)**: 30-80ms delay, 100Hz-12kHz filtering - more subtle, brighter sound
+- **Outdoors - Pro**: 70-100ms delay, 400Hz-2.5kHz filtering - follows professional audio engineering research with aggressive high-frequency rolloff for authentic outdoor air absorption and mid-range focus
+
 **API Endpoint:**
 - `POST /api/jobs/:jobId/apply-voice-filter`
   - Request body: `{ preset: string, mix: number }`
-  - Preset validation: Must be one of the 7 available presets
+  - Preset validation: Must be one of the 8 available presets
   - Mix range: 0-100 (converted to 0.0-1.0 decimal for FFmpeg, representing effect strength)
   - Runs asynchronously in background
   - Stores video path with effect, preset, and strength level in job metadata under `voiceFilter`
 
 **UI Flow:**
 - After successful lip-sync completion (with or without ambient enhancement), user sees:
-  - Preset selector dropdown (7 options)
+  - Preset selector dropdown (8 options)
   - Effect strength slider (0-100%, default 50%)
 - **Apply Workflow**: User selects preset and adjusts strength → clicks "Apply Voice Effect" → system processes video with selected effect
 - Polling updates status every 3 seconds until completion
