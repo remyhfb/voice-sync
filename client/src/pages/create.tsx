@@ -712,7 +712,7 @@ export default function CreatePage() {
                 )}
 
                 <Card className="p-6">
-                  <h2 className="text-xl font-semibold mb-4">Next Steps</h2>
+                  <h2 className="text-xl font-semibold mb-4">Your Video</h2>
                   <div className="flex flex-col gap-3">
                     <div className="flex gap-3">
                       <Button size="lg" asChild className="flex-1">
@@ -749,11 +749,18 @@ export default function CreatePage() {
                         )}
                       </Button>
                     )}
+                  </div>
+                </Card>
 
-                    {!currentJob.metadata?.ambientEnhancement?.enhancedVideoPath && (
-                      <div className="space-y-3">
-                        {!currentJob.metadata?.ambientEnhancement?.previewAudioPath ? (
-                          <>
+                {!currentJob.metadata?.ambientEnhancement?.enhancedVideoPath && (
+                  <Card className="p-6">
+                    <h2 className="text-xl font-semibold mb-4">Ambient Sound Enhancement</h2>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Add professional background atmosphere to your video
+                    </p>
+                    <div className="space-y-3">
+                      {!currentJob.metadata?.ambientEnhancement?.previewAudioPath ? (
+                        <>
                             <div className="flex flex-col gap-2">
                               <label className="text-sm font-medium">Add Ambient Sound (Optional)</label>
                               <Select 
@@ -912,9 +919,16 @@ export default function CreatePage() {
                         )}
                       </div>
                     )}
+                  </Card>
+                )}
 
-                    {!currentJob.metadata?.voiceFilter?.enhancedVideoPath && (
-                      <div className="space-y-3 mt-6 pt-6 border-t">
+                {!currentJob.metadata?.voiceFilter?.enhancedVideoPath && (
+                  <Card className="p-6">
+                    <h2 className="text-xl font-semibold mb-4">Voice Effects</h2>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Add acoustic effects to transform your voice
+                    </p>
+                    <div className="space-y-3">
                         <div className="flex flex-col gap-2">
                           <label className="text-sm font-medium">Add Voice Effect (Optional)</label>
                           <Select 
@@ -942,7 +956,7 @@ export default function CreatePage() {
                         </div>
                         <div className="flex flex-col gap-2">
                           <div className="flex items-center justify-between">
-                            <label className="text-sm font-medium">Effect Strength</label>
+                            <label className="text-sm font-medium">Effect Volume</label>
                             <span className="text-sm text-muted-foreground font-mono">{voiceFilterMix}%</span>
                           </div>
                           <Slider
@@ -956,7 +970,7 @@ export default function CreatePage() {
                             className="w-full"
                           />
                           <p className="text-xs text-muted-foreground">
-                            0% = original voice, 100% = full effect
+                            Control how much of the effect is applied to your voice
                           </p>
                         </div>
                         <Button 
@@ -979,10 +993,9 @@ export default function CreatePage() {
                             </>
                           )}
                         </Button>
-                      </div>
-                    )}
-                  </div>
-                </Card>
+                    </div>
+                  </Card>
+                )}
               </div>
             )}
 
