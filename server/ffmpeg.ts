@@ -600,48 +600,48 @@ export class FFmpegService {
       // EXPERT-VALIDATED REVERB EFFECTS (from professional audio engineering)
       case "concert_hall_expert":
         // Expert parameters: proven in production audio systems
-        audioFilter = `aecho=0.8:0.88:60:0.4|120:0.3|180:0.25|240:0.2|300:0.15|500:0.1`;
+        audioFilter = `aecho=0.8:0.88:60:0.4:120:0.3:180:0.25:240:0.2:300:0.15:500:0.1`;
         break;
       
       case "cathedral_expert":
         // Expert parameters: massive cathedral space with extremely long decay
-        audioFilter = `aecho=0.7:0.9:100:0.5|200:0.45|400:0.4|800:0.35|1200:0.3|1600:0.25|2400:0.2|3200:0.15`;
+        audioFilter = `aecho=0.7:0.9:100:0.5:200:0.45:400:0.4:800:0.35:1200:0.3:1600:0.25:2400:0.2:3200:0.15`;
         break;
       
       case "stadium_expert":
         // Expert parameters: large arena with strong early reflections
-        audioFilter = `aecho=0.75:0.85:150:0.4|300:0.35|600:0.3|1000:0.25|1500:0.2|2500:0.15|3500:0.1`;
+        audioFilter = `aecho=0.75:0.85:150:0.4:300:0.35:600:0.3:1000:0.25:1500:0.2:2500:0.15:3500:0.1`;
         break;
       
       case "small_room_expert":
         // Expert parameters: intimate close-miked acoustic
-        audioFilter = `aecho=1.0:0.7:15:0.5|30:0.3`;
+        audioFilter = `aecho=1.0:0.7:15:0.5:30:0.3`;
         break;
       
       // OUTDOOR ACOUSTIC EFFECTS (NEW)
       case "forest":
         // Forest: heavy absorption from trees/foliage, minimal reflections, soft diffuse reverb
-        audioFilter = `aecho=0.5:0.3:25:0.15|50:0.1,highpass=f=200,lowpass=f=8000,equalizer=f=4000:width_type=h:width=2000:g=-3`;
+        audioFilter = `aecho=0.5:0.3:25:0.15:50:0.1,highpass=f=200,lowpass=f=8000,equalizer=f=4000:width_type=h:width=2000:g=-3`;
         break;
       
       case "canyon":
         // Canyon: dramatic long echoes with 1-2 second delays, strong late reflections
-        audioFilter = `aecho=0.6:0.8:800:0.5|1200:0.45|1800:0.4|2500:0.3,equalizer=f=500:width_type=h:width=300:g=2`;
+        audioFilter = `aecho=0.6:0.8:800:0.5:1200:0.45:1800:0.4:2500:0.3,equalizer=f=500:width_type=h:width=300:g=2`;
         break;
       
       case "open_field":
         // Open field: almost no reflections, pure sound absorption, very minimal reverb
-        audioFilter = `aecho=0.3:0.2:10:0.05|20:0.03,highpass=f=100,lowpass=f=10000`;
+        audioFilter = `aecho=0.3:0.2:10:0.05:20:0.03,highpass=f=100,lowpass=f=10000`;
         break;
       
       case "beach":
         // Beach: water reflections, wind filtering, distant wave echoes, high-freq rolloff
-        audioFilter = `aecho=0.5:0.4:300:0.25|600:0.2|1000:0.15,highpass=f=150,lowpass=f=6000,equalizer=f=5000:width_type=h:width=2000:g=-4`;
+        audioFilter = `aecho=0.5:0.4:300:0.25:600:0.2:1000:0.15,highpass=f=150,lowpass=f=6000,equalizer=f=5000:width_type=h:width=2000:g=-4`;
         break;
       
       case "mountain_valley":
         // Mountain valley: complex multi-path echoes from surrounding peaks, medium-long delays
-        audioFilter = `aecho=0.65:0.75:400:0.4|700:0.35|1100:0.3|1600:0.25|2200:0.2,equalizer=f=300:width_type=h:width=200:g=1`;
+        audioFilter = `aecho=0.65:0.75:400:0.4:700:0.35:1100:0.3:1600:0.25:2200:0.2,equalizer=f=300:width_type=h:width=200:g=1`;
         break;
       
       // COMMUNICATION EFFECTS (FIXED - more aggressive for audibility)
@@ -658,12 +658,12 @@ export class FFmpegService {
       // ORIGINAL OUTDOOR EFFECTS (kept for backward compatibility)
       case "outdoor":
         // Original experimental outdoor
-        audioFilter = `aecho=0.6:0.5:30|80:0.15|0.1,highpass=f=100,lowpass=f=12000`;
+        audioFilter = `aecho=0.6:0.5:30:0.15:80:0.1,highpass=f=100,lowpass=f=12000`;
         break;
       
       case "outdoor_pro":
         // Original professional outdoor with air absorption
-        audioFilter = `aecho=0.5:0.4:70|100:0.25|0.15,highpass=f=400,lowpass=f=2500`;
+        audioFilter = `aecho=0.5:0.4:70:0.25:100:0.15,highpass=f=400,lowpass=f=2500`;
         break;
       
       default:
@@ -750,48 +750,48 @@ export class FFmpegService {
       // EXPERT-VALIDATED REVERB EFFECTS (from professional audio engineering)
       case "concert_hall_expert":
         // Expert parameters: proven in production audio systems
-        audioFilter = `aecho=0.8:0.88:60:0.4|120:0.3|180:0.25|240:0.2|300:0.15|500:0.1`;
+        audioFilter = `aecho=0.8:0.88:60:0.4:120:0.3:180:0.25:240:0.2:300:0.15:500:0.1`;
         break;
       
       case "cathedral_expert":
         // Expert parameters: massive cathedral space with extremely long decay
-        audioFilter = `aecho=0.7:0.9:100:0.5|200:0.45|400:0.4|800:0.35|1200:0.3|1600:0.25|2400:0.2|3200:0.15`;
+        audioFilter = `aecho=0.7:0.9:100:0.5:200:0.45:400:0.4:800:0.35:1200:0.3:1600:0.25:2400:0.2:3200:0.15`;
         break;
       
       case "stadium_expert":
         // Expert parameters: large arena with strong early reflections
-        audioFilter = `aecho=0.75:0.85:150:0.4|300:0.35|600:0.3|1000:0.25|1500:0.2|2500:0.15|3500:0.1`;
+        audioFilter = `aecho=0.75:0.85:150:0.4:300:0.35:600:0.3:1000:0.25:1500:0.2:2500:0.15:3500:0.1`;
         break;
       
       case "small_room_expert":
         // Expert parameters: intimate close-miked acoustic
-        audioFilter = `aecho=1.0:0.7:15:0.5|30:0.3`;
+        audioFilter = `aecho=1.0:0.7:15:0.5:30:0.3`;
         break;
       
       // OUTDOOR ACOUSTIC EFFECTS (NEW)
       case "forest":
         // Forest: heavy absorption from trees/foliage, minimal reflections, soft diffuse reverb
-        audioFilter = `aecho=0.5:0.3:25:0.15|50:0.1,highpass=f=200,lowpass=f=8000,equalizer=f=4000:width_type=h:width=2000:g=-3`;
+        audioFilter = `aecho=0.5:0.3:25:0.15:50:0.1,highpass=f=200,lowpass=f=8000,equalizer=f=4000:width_type=h:width=2000:g=-3`;
         break;
       
       case "canyon":
         // Canyon: dramatic long echoes with 1-2 second delays, strong late reflections
-        audioFilter = `aecho=0.6:0.8:800:0.5|1200:0.45|1800:0.4|2500:0.3,equalizer=f=500:width_type=h:width=300:g=2`;
+        audioFilter = `aecho=0.6:0.8:800:0.5:1200:0.45:1800:0.4:2500:0.3,equalizer=f=500:width_type=h:width=300:g=2`;
         break;
       
       case "open_field":
         // Open field: almost no reflections, pure sound absorption, very minimal reverb
-        audioFilter = `aecho=0.3:0.2:10:0.05|20:0.03,highpass=f=100,lowpass=f=10000`;
+        audioFilter = `aecho=0.3:0.2:10:0.05:20:0.03,highpass=f=100,lowpass=f=10000`;
         break;
       
       case "beach":
         // Beach: water reflections, wind filtering, distant wave echoes, high-freq rolloff
-        audioFilter = `aecho=0.5:0.4:300:0.25|600:0.2|1000:0.15,highpass=f=150,lowpass=f=6000,equalizer=f=5000:width_type=h:width=2000:g=-4`;
+        audioFilter = `aecho=0.5:0.4:300:0.25:600:0.2:1000:0.15,highpass=f=150,lowpass=f=6000,equalizer=f=5000:width_type=h:width=2000:g=-4`;
         break;
       
       case "mountain_valley":
         // Mountain valley: complex multi-path echoes from surrounding peaks, medium-long delays
-        audioFilter = `aecho=0.65:0.75:400:0.4|700:0.35|1100:0.3|1600:0.25|2200:0.2,equalizer=f=300:width_type=h:width=200:g=1`;
+        audioFilter = `aecho=0.65:0.75:400:0.4:700:0.35:1100:0.3:1600:0.25:2200:0.2,equalizer=f=300:width_type=h:width=200:g=1`;
         break;
       
       // COMMUNICATION EFFECTS (FIXED - more aggressive for audibility)
@@ -808,12 +808,12 @@ export class FFmpegService {
       // ORIGINAL OUTDOOR EFFECTS (kept for backward compatibility)
       case "outdoor":
         // Original experimental outdoor
-        audioFilter = `aecho=0.6:0.5:30|80:0.15|0.1,highpass=f=100,lowpass=f=12000`;
+        audioFilter = `aecho=0.6:0.5:30:0.15:80:0.1,highpass=f=100,lowpass=f=12000`;
         break;
       
       case "outdoor_pro":
         // Original professional outdoor with air absorption
-        audioFilter = `aecho=0.5:0.4:70|100:0.25|0.15,highpass=f=400,lowpass=f=2500`;
+        audioFilter = `aecho=0.5:0.4:70:0.25:100:0.15,highpass=f=400,lowpass=f=2500`;
         break;
       
       default:
