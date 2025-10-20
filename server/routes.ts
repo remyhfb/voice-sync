@@ -682,7 +682,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const { preset, customPrompt } = validationResult.data;
+      const { preset, customPrompt, volume } = validationResult.data;
       
       const job = await storage.getProcessingJob(jobId);
 
@@ -708,7 +708,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const { soundRegenerator } = await import("./sound-regenerator");
           
-          logger.info(`Job:${jobId}`, "Starting ambient sound enhancement", { preset, customPrompt });
+          logger.info(`Job:${jobId}`, "Starting ambient sound enhancement", { preset, customPrompt, volume });
           
           // Re-fetch latest job to preserve all metadata
           let latestJob = await storage.getProcessingJob(jobId);
@@ -745,7 +745,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             tempVideoPath,
             preset,
             customPrompt,
-            '/tmp/sound-design'
+            '/tmp/sound-design',
+            volume
           );
 
           // Clean up temp video file

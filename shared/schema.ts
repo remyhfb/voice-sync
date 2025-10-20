@@ -122,6 +122,10 @@ export const enhanceAmbientSchema = z.object({
     .min(5, "Custom prompt must be at least 5 characters")
     .max(200, "Custom prompt must be less than 200 characters")
     .optional(),
+  volume: z.number()
+    .min(0, "Volume must be at least 0")
+    .max(100, "Volume must be at most 100")
+    .default(15),
 }).refine(
   (data) => data.preset || data.customPrompt,
   { message: "Either preset or customPrompt must be provided" }
