@@ -26,7 +26,7 @@ export default function CreatePage() {
   const [customAmbientPrompt, setCustomAmbientPrompt] = useState<string>("");
   const [ambientVolume, setAmbientVolume] = useState<number>(15);
   const [applyingVoiceFilter, setApplyingVoiceFilter] = useState(false);
-  const [selectedVoiceFilter, setSelectedVoiceFilter] = useState<string>("concert_hall");
+  const [selectedVoiceFilter, setSelectedVoiceFilter] = useState<string>("concert_hall_expert");
   const [voiceFilterMix, setVoiceFilterMix] = useState<number>(50);
   const [successAlertDismissed, setSuccessAlertDismissed] = useState(false);
   const { toast } = useToast();
@@ -779,7 +779,7 @@ export default function CreatePage() {
                         size="lg" 
                         variant="outline"
                         onClick={() => {
-                          setSelectedVoiceFilter("concert_hall");
+                          setSelectedVoiceFilter("concert_hall_expert");
                           setVoiceFilterMix(50);
                           queryClient.setQueryData(['/api/jobs', currentJob.id], {
                             ...currentJob,
@@ -1029,12 +1029,22 @@ export default function CreatePage() {
                                 <SelectValue placeholder="Select effect..." />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="concert_hall" data-testid="option-concert-hall">Concert Hall</SelectItem>
-                                <SelectItem value="small_room" data-testid="option-small-room">Small Room</SelectItem>
-                                <SelectItem value="cathedral" data-testid="option-cathedral">Cathedral</SelectItem>
-                                <SelectItem value="stadium" data-testid="option-stadium">Stadium</SelectItem>
-                                <SelectItem value="outdoor" data-testid="option-outdoor">Outdoor</SelectItem>
-                                <SelectItem value="outdoor_pro" data-testid="option-outdoor-pro">Outdoors - Pro</SelectItem>
+                                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Expert-Validated Reverb</div>
+                                <SelectItem value="concert_hall_expert" data-testid="option-concert-hall-expert">Concert Hall (Expert)</SelectItem>
+                                <SelectItem value="cathedral_expert" data-testid="option-cathedral-expert">Cathedral (Expert)</SelectItem>
+                                <SelectItem value="stadium_expert" data-testid="option-stadium-expert">Stadium (Expert)</SelectItem>
+                                <SelectItem value="small_room_expert" data-testid="option-small-room-expert">Small Room (Expert)</SelectItem>
+                                
+                                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Outdoor Environments</div>
+                                <SelectItem value="forest" data-testid="option-forest">Forest</SelectItem>
+                                <SelectItem value="canyon" data-testid="option-canyon">Canyon</SelectItem>
+                                <SelectItem value="open_field" data-testid="option-open-field">Open Field</SelectItem>
+                                <SelectItem value="beach" data-testid="option-beach">Beach</SelectItem>
+                                <SelectItem value="mountain_valley" data-testid="option-mountain-valley">Mountain Valley</SelectItem>
+                                <SelectItem value="outdoor" data-testid="option-outdoor">Outdoor (Experimental)</SelectItem>
+                                <SelectItem value="outdoor_pro" data-testid="option-outdoor-pro">Outdoor (Pro)</SelectItem>
+                                
+                                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Communication</div>
                                 <SelectItem value="telephone" data-testid="option-telephone">Telephone</SelectItem>
                                 <SelectItem value="radio" data-testid="option-radio">Radio</SelectItem>
                               </SelectContent>
@@ -1138,7 +1148,7 @@ export default function CreatePage() {
                               size="lg"
                               variant="outline"
                               onClick={() => {
-                                setSelectedVoiceFilter("concert_hall");
+                                setSelectedVoiceFilter("concert_hall_expert");
                                 queryClient.setQueryData(['/api/jobs', currentJob.id], {
                                   ...currentJob,
                                   metadata: {

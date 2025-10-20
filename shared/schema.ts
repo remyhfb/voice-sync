@@ -146,7 +146,16 @@ export const enhanceAmbientSchema = z.object({
 export type EnhanceAmbientRequest = z.infer<typeof enhanceAmbientSchema>;
 
 // Voice filter request schema
-export const VOICE_FILTER_PRESETS = ["concert_hall", "small_room", "cathedral", "telephone", "radio", "stadium", "outdoor", "outdoor_pro"] as const;
+export const VOICE_FILTER_PRESETS = [
+  // Expert-validated reverb effects
+  "concert_hall_expert", "cathedral_expert", "stadium_expert", "small_room_expert",
+  // Outdoor environments
+  "forest", "canyon", "open_field", "beach", "mountain_valley",
+  // Communication effects
+  "telephone", "radio",
+  // Original outdoor effects (backward compatibility)
+  "outdoor", "outdoor_pro"
+] as const;
 export type VoiceFilterPreset = typeof VOICE_FILTER_PRESETS[number];
 
 export const applyVoiceFilterSchema = z.object({
