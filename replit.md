@@ -81,17 +81,34 @@ A simplified optional feature that adds professional ambient atmosphere to the f
 #### Voice Effects
 An optional feature that applies acoustic effects to the voice audio using FFmpeg's built-in audio filters. No external APIs required - all processing happens server-side using FFmpeg.
 
-**Available Effect Presets:**
-Reverb effects are designed using professional acoustic engineering standards for RT60 (reverberation time) and early reflection patterns:
+**Naming Convention:**
+- **Expert-Validated** - Effects with "(Expert)" suffix use proven audio engineering parameters from production systems
+- **New Outdoor Environments** - Forest, Canyon, Open Field, Beach, Mountain Valley
+- **Communication** - Telephone, Radio (fixed with aggressive filtering for audibility)
+- **Original** - Outdoor (Experimental), Outdoor (Pro) kept for backward compatibility
 
-- **Concert Hall**: RT60 ~2.0s, warm/balanced character with medium early reflections (20-40ms). Multiple echo taps with progressive decay and subtle low-frequency boost for warmth.
-- **Small Room**: RT60 ~0.3s, tight/intimate character with very short reflections (5-15ms). Fast, tight reverb for close acoustic spaces.
-- **Cathedral**: RT60 ~6.0s, massive space with very long decay and strong low-frequency buildup. Long delays (50-100ms early reflections) for authentic large stone chamber acoustic.
-- **Stadium**: RT60 ~1.5s, bright/harsh character with strong early reflections from hard surfaces. Short punchy delays (10-30ms) with high-frequency emphasis for concrete arena sound.
-- **Outdoor**: Minimal reverb with high-frequency rolloff for open air ambience (experimental). Short delays with gentle high-frequency reduction.
-- **Outdoors - Pro**: Professional outdoor acoustic based on audio engineering research. 70-100ms pre-delay, 400Hz HPF, 2.5kHz LPF for authentic outdoor air absorption and mid-range focus.
-- **Telephone**: Narrow band-pass (500-2800Hz) with mid-frequency boost at 1800Hz and volume normalization for classic telephone sound.
-- **Radio**: AM radio effect with band-pass (400-3500Hz), resonant mid boost at 2000Hz, and slight volume increase for radio character.
+**Available Effect Presets (13 Total):**
+
+*Expert-Validated Reverb Effects (proven parameters from professional audio engineering):*
+- **Concert Hall (Expert)**: Expert parameters proven in production audio systems with carefully balanced early reflections and decay
+- **Cathedral (Expert)**: Massive cathedral space with extremely long decay, ideal for dramatic vocal presence
+- **Stadium (Expert)**: Large arena with strong early reflections from hard surfaces, bright arena sound
+- **Small Room (Expert)**: Intimate close-miked acoustic with tight, fast reverb
+
+*Outdoor Environment Effects (NEW - comprehensive outdoor acoustic catalog):*
+- **Forest**: Heavy absorption from trees/foliage, minimal reflections, soft diffuse reverb with high-frequency dampening
+- **Canyon**: Dramatic long echoes with 1-2 second delays, strong late reflections for natural echo effect
+- **Open Field**: Almost no reflections, pure sound absorption, very minimal reverb for ultra-natural outdoor sound
+- **Beach**: Water reflections, wind filtering, distant wave echoes with high-frequency rolloff
+- **Mountain Valley**: Complex multi-path echoes from surrounding peaks with medium-long delays
+
+*Communication Effects (FIXED - now properly audible):*
+- **Telephone**: Very narrow band-pass (300-3000Hz), aggressive mid boost at 1500Hz, 3x volume for authentic phone sound
+- **Radio**: AM radio effect with band-pass (500-4000Hz), strong resonance at 2000Hz, 2.5x volume for classic broadcast sound
+
+*Original Outdoor Effects (kept for backward compatibility):*
+- **Outdoor (Experimental)**: Original experimental outdoor with minimal reverb
+- **Outdoor (Pro)**: Original professional outdoor with air absorption (70-100ms pre-delay, 400Hz HPF, 2.5kHz LPF)
 
 **Technical Implementation:**
 - **FFmpeg Audio Filters**: Uses `aecho` for reverb effects with frequency shaping via `equalizer`. Telephone/radio use `highpass`/`lowpass` with `equalizer` and `volume` filters.
@@ -109,14 +126,14 @@ Reverb effects are designed using professional acoustic engineering standards fo
   - Updates job metadata with status and previewAudioPath
 - `POST /api/jobs/:jobId/apply-voice-filter`
   - Request body: `{ preset: string, mix: number }`
-  - Preset validation: Must be one of the 8 available presets
+  - Preset validation: Must be one of the 13 available presets (4 expert, 5 outdoor, 2 communication, 2 original)
   - Mix range: 0-100 (converted to 0.0-1.0 decimal for FFmpeg, representing effect strength)
   - Runs asynchronously in background
   - Stores video path with effect, preset, and strength level in job metadata under `voiceFilter`
 
 **UI Flow:**
 - After successful lip-sync completion (with or without ambient enhancement), user sees:
-  - Preset selector dropdown (8 options)
+  - Preset selector dropdown (13 options organized by category: Expert, Outdoor, Communication)
   - Effect strength slider (0-100%, default 50%)
 - **Preview Workflow (Optional)**: User selects preset and adjusts strength → clicks "Preview Voice Effect" → hears 30-second audio sample → audio player displays at full volume regardless of strength slider
 - **Apply Workflow**: User adjusts strength slider to desired level → clicks "Apply to Video" → system processes video with selected effect at current slider strength
