@@ -24,7 +24,7 @@ VoiceSwap emphasizes processing transparency through visual feedback and real-ti
 The system offers three primary processing pipelines:
 1.  **Speech-to-Speech (For VEO)**: Preserves professional acting/emotion while replacing the voice.
 2.  **Time-Aligned TTS**: Generates speech from text with word-level timing precision but neutral delivery.
-3.  **Lip-Sync (Your Voice)**: A hybrid approach using the user's authentic voice acting combined with AI lip-sync technology. This pipeline includes audio cleanup (ElevenLabs), transcription (Whisper), segment alignment, video time-stretching (FFmpeg), and final lip-sync (Sync Labs).
+3.  **Lip-Sync (Your Voice)**: A hybrid approach using the user's authentic voice acting combined with AI lip-sync technology. This pipeline includes audio cleanup (ElevenLabs), silence trimming, audio normalization to -14 LUFS (YouTube standard), transcription (Whisper), segment alignment, video time-stretching (FFmpeg), and final lip-sync (Sync Labs).
 
 The system also offers two optional post-processing enhancements:
 4.  **Ambient Sound Enhancement**: Adds professional ambient atmosphere to finished videos using ElevenLabs Sound Effects API (see below).
@@ -145,7 +145,7 @@ An optional feature that applies acoustic effects to the voice audio using FFmpe
 ## External Dependencies
 
 *   **ElevenLabs API**: Used for instant voice cloning, speech-to-speech conversion with timing preservation, background noise removal, and ambient sound generation via Sound Effects API.
-*   **FFmpeg**: Integrated for audio extraction, format conversion, video time-stretching, audio mixing, and metadata extraction.
+*   **FFmpeg**: Integrated for audio extraction, format conversion, audio normalization (EBU R128 loudness normalization to -14 LUFS), video time-stretching, audio mixing, and metadata extraction.
 *   **Google Cloud Storage**: Utilized for scalable object storage of project files.
 *   **PostgreSQL (via Neon)**: The primary database for application data.
 *   **Drizzle ORM**: Used for type-safe database interactions with PostgreSQL.
