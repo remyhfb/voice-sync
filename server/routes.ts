@@ -864,8 +864,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Run filter asynchronously
       (async () => {
         try {
-          const { ffmpegService } = await import("./ffmpeg");
-          
           logger.info(`Job:${jobId}`, "Starting voice filter application", { preset, mix });
           
           // Re-fetch latest job to preserve all metadata
