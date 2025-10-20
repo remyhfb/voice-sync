@@ -608,10 +608,12 @@ export class FFmpegService {
         audioFilter = `aecho=0.8:0.9:500|1000|2000:0.35|0.3|0.25`;
         break;
       case "telephone":
-        audioFilter = `highpass=f=300,lowpass=f=3400`;
+        // Narrow telephone band-pass with mid boost and volume normalization
+        audioFilter = `highpass=f=500,lowpass=f=2800,equalizer=f=1800:width_type=h:width=600:g=8,volume=2.0`;
         break;
       case "radio":
-        audioFilter = `highpass=f=200,lowpass=f=5000,equalizer=f=2500:width_type=h:width=1000:g=3`;
+        // AM radio with band-pass, resonant mid boost, and slight volume increase
+        audioFilter = `highpass=f=400,lowpass=f=3500,equalizer=f=2000:width_type=h:width=400:g=10,volume=1.5`;
         break;
       case "outdoor":
         audioFilter = `aecho=0.6:0.5:30|80:0.15|0.1,highpass=f=100,lowpass=f=12000`;
@@ -626,7 +628,8 @@ export class FFmpegService {
     const dryWeight = (1 - mixDecimal).toFixed(2);
     const wetWeight = mixDecimal.toFixed(2);
     
-    const filterComplex = `[0:a]asplit=2[dry][wet];[wet]${audioFilter}[wet_processed];[dry][wet_processed]amix=inputs=2:weights='${dryWeight} ${wetWeight}'[aout]`;
+    // Use comma-separated weights for FFmpeg amix filter
+    const filterComplex = `[0:a]asplit=2[dry][wet];[wet]${audioFilter}[wet_processed];[dry][wet_processed]amix=inputs=2:weights=${dryWeight},${wetWeight}[aout]`;
 
     return new Promise((resolve, reject) => {
       const args = [
@@ -718,13 +721,13 @@ export class FFmpegService {
         break;
       
       case "telephone":
-        // Band-pass filter (300Hz - 3400Hz, typical telephone range)
-        audioFilter = `highpass=f=300,lowpass=f=3400`;
+        // Narrow telephone band-pass with mid boost and volume normalization
+        audioFilter = `highpass=f=500,lowpass=f=2800,equalizer=f=1800:width_type=h:width=600:g=8,volume=2.0`;
         break;
       
       case "radio":
-        // Band-pass with slight resonance (like AM radio)
-        audioFilter = `highpass=f=200,lowpass=f=5000,equalizer=f=2500:width_type=h:width=1000:g=3`;
+        // AM radio with band-pass, resonant mid boost, and slight volume increase
+        audioFilter = `highpass=f=400,lowpass=f=3500,equalizer=f=2000:width_type=h:width=400:g=10,volume=1.5`;
         break;
       
       case "outdoor":
@@ -752,9 +755,8 @@ export class FFmpegService {
     const dryWeight = (1 - mixDecimal).toFixed(2);
     const wetWeight = mixDecimal.toFixed(2);
     
-    // Source: https://ffmpeg.org/ffmpeg-filters.html#amix
-    // Note: 'normalize' option doesn't exist in this FFmpeg version, removed
-    const filterComplex = `[0:a]asplit=2[dry][wet];[wet]${audioFilter}[wet_processed];[dry][wet_processed]amix=inputs=2:weights='${dryWeight} ${wetWeight}'[aout]`;
+    // Use comma-separated weights for FFmpeg amix filter (not space-separated)
+    const filterComplex = `[0:a]asplit=2[dry][wet];[wet]${audioFilter}[wet_processed];[dry][wet_processed]amix=inputs=2:weights=${dryWeight},${wetWeight}[aout]`;
 
     logger.debug("FFmpeg", "Filter complex", { filterComplex, audioFilter });
 
