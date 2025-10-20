@@ -246,9 +246,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const uploadsIndex = pathParts.indexOf('uploads');
         const objectPath = pathParts.slice(uploadsIndex).join('/');
         
+        // Extract bucket name from PRIVATE_OBJECT_DIR
+        const privateObjectDir = process.env.PRIVATE_OBJECT_DIR || "";
+        const pathSegments = privateObjectDir.split('/').filter(s => s);
+        const bucketName = pathSegments[0];
+        
         const objectStorageService = new ObjectStorageService();
         const signedUrl = await objectStorageService.getSignedReadURL(
-          `https://storage.googleapis.com/${process.env.BUCKET_ID}/${objectPath}`,
+          `https://storage.googleapis.com/${bucketName}/${objectPath}`,
           3600
         );
         
