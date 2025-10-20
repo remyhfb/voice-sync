@@ -44,25 +44,33 @@ A simplified optional feature that adds professional ambient atmosphere to the f
 
 **Technical Implementation:**
 - **ElevenLabs Sound Effects API**: Generates 30-second ambient loops using v2 model with 0.5 prompt influence
-- **FFmpeg Audio Mixing**: Loops ambient audio and mixes at 15% volume with original lip-synced video (preserving 100% original audio)
+- **FFmpeg Audio Mixing**: Loops ambient audio and mixes at user-configurable volume (0-100%, default 15%) with original lip-synced video (preserving 100% original audio)
+- **Volume Control**: User-adjustable slider with real-time feedback, stored in metadata to ensure preview and final mix use identical volume
 - **No External Services**: All processing happens in single Replit environment using built-in integrations
 
-**API Endpoint:**
+**API Endpoints:**
+- `POST /api/jobs/:jobId/preview-ambient`
+  - Request body: `{ preset?: string, customPrompt?: string, volume: number }`
+  - Generates 30-second preview audio for listening before committing
+  - Stores volume in metadata for consistency with final mix
 - `POST /api/jobs/:jobId/enhance-ambient`
-- Request body: `{ preset?: "office" | "cafe" | "nature" | "city" | "studio" | "home", customPrompt?: string }`
-- Validation: Either preset or customPrompt must be provided (not both)
-- Runs asynchronously in background
-- Stores enhanced video path and prompt details in job metadata under `ambientEnhancement`
+  - Request body: `{ preset?: string, customPrompt?: string, volume: number }`
+  - Validation: Either preset or customPrompt must be provided (not both)
+  - Volume range: 0-100 (converted to 0.0-1.0 decimal for FFmpeg)
+  - Runs asynchronously in background
+  - Stores enhanced video path, prompt details, and volume in job metadata under `ambientEnhancement`
 
 **UI Flow:**
 - After successful lip-sync completion, user sees:
   - Preset selector dropdown (6 options)
   - Custom prompt text input (5-200 characters)
+  - Volume slider (0-100%, default 15%)
   - Preset dropdown is disabled when custom prompt is entered
-- User selects preset OR enters custom prompt and clicks "Add Ambient Sound"
+- **Preview Workflow**: User selects preset/prompt and volume → clicks "Preview Ambient Sound" → hears 30-second sample → volume stored in metadata
+- **Apply Workflow**: User clicks "Apply to Video" → system uses stored preview volume (not current slider) → ensures consistency between preview and final mix
 - Polling updates status every 3 seconds until completion
 - Enhanced video becomes available for download alongside original result
-- Completion message shows which preset or custom prompt was used
+- Completion message shows which preset or custom prompt was used and the applied volume
 
 ## External Dependencies
 
