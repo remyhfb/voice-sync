@@ -242,18 +242,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Download video from object storage to temp file
         logger.info(`Job:${existingJobId}`, `Downloading video from object storage: ${activeVideoPath}`);
+        
+        // Extract bucket name and private dir from PRIVATE_OBJECT_DIR
+        const privateObjectDir = process.env.PRIVATE_OBJECT_DIR || "";
+        if (!privateObjectDir) {
+          return res.status(500).json({ error: "PRIVATE_OBJECT_DIR not configured" });
+        }
+        const pathSegments = privateObjectDir.split('/').filter(s => s);
+        const bucketName = pathSegments[0];
+        const privateDirName = pathSegments[1]; // .private
+        
+        // Extract just the uploads/xxx part from the full path
         const pathParts = activeVideoPath.split('/');
         const uploadsIndex = pathParts.indexOf('uploads');
         const objectPath = pathParts.slice(uploadsIndex).join('/');
         
-        // Extract bucket name from PRIVATE_OBJECT_DIR
-        const privateObjectDir = process.env.PRIVATE_OBJECT_DIR || "";
-        const pathSegments = privateObjectDir.split('/').filter(s => s);
-        const bucketName = pathSegments[0];
-        
         const objectStorageService = new ObjectStorageService();
         const signedUrl = await objectStorageService.getSignedReadURL(
-          `https://storage.googleapis.com/${bucketName}/${objectPath}`,
+          `https://storage.googleapis.com/${bucketName}/${privateDirName}/${objectPath}`,
           3600
         );
         
