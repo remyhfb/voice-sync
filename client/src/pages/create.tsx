@@ -690,50 +690,76 @@ export default function CreatePage() {
           </p>
         </div>
 
-        {!currentJob && (
+        {(!currentJob || currentJob.status === "pending") && (
           <Card className="p-8 mb-8">
             <div className="grid md:grid-cols-2 gap-8">
-              {/* VEO Video Upload */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground font-semibold text-sm">
-                    1
+              {/* VEO Video Upload - hide if job already exists */}
+              {!currentJob && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground font-semibold text-sm">
+                      1
+                    </div>
+                    <h2 className="text-lg font-semibold">VEO Video</h2>
                   </div>
-                  <h2 className="text-lg font-semibold">VEO Video</h2>
+                  <FileUploadZone
+                    onFilesSelected={handleVideoUpload}
+                    accept="video/*"
+                    multiple={false}
+                    maxSize={100 * 1024 * 1024}
+                    title="Drop VEO video"
+                    description="MP4, MOV, AVI, WebM · Max 100MB"
+                    icon="video"
+                  />
+                  {videoFile && (
+                    <div className="flex items-center gap-2 p-3 bg-chart-2/10 border border-chart-2/30 rounded-md">
+                      <CheckCircle2 className="h-4 w-4 text-chart-2 flex-shrink-0" />
+                      <p className="text-sm truncate flex-1">
+                        {videoFile.name}
+                      </p>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {(videoFile.size / (1024 * 1024)).toFixed(1)}MB
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-3 w-3 text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <p className="text-xs text-muted-foreground">
+                      Remove AI artifacts (grunts, odd expressions) for best results
+                    </p>
+                  </div>
                 </div>
-                <FileUploadZone
-                  onFilesSelected={handleVideoUpload}
-                  accept="video/*"
-                  multiple={false}
-                  maxSize={100 * 1024 * 1024}
-                  title="Drop VEO video"
-                  description="MP4, MOV, AVI, WebM · Max 100MB"
-                  icon="video"
-                />
-                {videoFile && (
+              )}
+
+              {/* Show video info if coming from editor */}
+              {currentJob && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-chart-2 text-chart-2-foreground font-semibold text-sm">
+                      ✓
+                    </div>
+                    <h2 className="text-lg font-semibold">VEO Video Ready</h2>
+                  </div>
                   <div className="flex items-center gap-2 p-3 bg-chart-2/10 border border-chart-2/30 rounded-md">
                     <CheckCircle2 className="h-4 w-4 text-chart-2 flex-shrink-0" />
-                    <p className="text-sm truncate flex-1">
-                      {videoFile.name}
+                    <p className="text-sm">
+                      {currentJob.metadata?.trimmedVideoPath ? "Edited video ready" : "Video uploaded"}
                     </p>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                      {(videoFile.size / (1024 * 1024)).toFixed(1)}MB
-                    </span>
                   </div>
-                )}
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="h-3 w-3 text-muted-foreground mt-0.5 flex-shrink-0" />
-                  <p className="text-xs text-muted-foreground">
-                    Remove AI artifacts (grunts, odd expressions) for best results
-                  </p>
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-3 w-3 text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <p className="text-xs text-muted-foreground">
+                      {currentJob.metadata?.trimmedVideoPath ? "Video has been trimmed and is ready for processing" : "Video is ready for processing"}
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Voice Recording Upload */}
               <div className="space-y-4">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground font-semibold text-sm">
-                    2
+                    {currentJob ? "2" : "2"}
                   </div>
                   <h2 className="text-lg font-semibold">Your Voice</h2>
                 </div>
@@ -771,22 +797,24 @@ export default function CreatePage() {
                 AI-powered lip-sync with perfect timing preservation
               </p>
               <div className="flex items-center gap-3">
-                <Button
-                  data-testid="button-edit-video"
-                  size="lg"
-                  variant="outline"
-                  onClick={handleEditVideo}
-                  disabled={!videoFile || uploadVideoMutation.isPending || processVideoMutation.isPending}
-                  className="flex-1"
-                >
-                  {uploadVideoMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {uploadVideoMutation.isPending ? "Uploading..." : "Edit Video First"}
-                </Button>
+                {!currentJob && (
+                  <Button
+                    data-testid="button-edit-video"
+                    size="lg"
+                    variant="outline"
+                    onClick={handleEditVideo}
+                    disabled={!videoFile || uploadVideoMutation.isPending || processVideoMutation.isPending}
+                    className="flex-1"
+                  >
+                    {uploadVideoMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {uploadVideoMutation.isPending ? "Uploading..." : "Edit Video First"}
+                  </Button>
+                )}
                 <Button
                   data-testid="button-start-processing"
                   size="lg"
                   onClick={handleStartProcessing}
-                  disabled={!videoFile || !audioFile || processVideoMutation.isPending || uploadVideoMutation.isPending}
+                  disabled={(!currentJob && !videoFile) || !audioFile || processVideoMutation.isPending || uploadVideoMutation.isPending}
                   className="flex-1"
                 >
                   {processVideoMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -798,9 +826,11 @@ export default function CreatePage() {
                   )}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Optional: Edit your video to remove unwanted segments before processing
-              </p>
+              {!currentJob && (
+                <p className="text-xs text-muted-foreground">
+                  Optional: Edit your video to remove unwanted segments before processing
+                </p>
+              )}
             </div>
           </Card>
         )}
