@@ -66,7 +66,7 @@ A simplified optional feature that adds professional ambient atmosphere to the f
   - Custom prompt text input (5-200 characters)
   - Volume slider (0-100%, default 15%)
   - Preset dropdown is disabled when custom prompt is entered
-- **Preview Workflow (Optional)**: User selects preset/prompt → clicks "Preview Ambient Sound" → hears 30-second sample at full volume
+- **Preview Workflow (Optional)**: User selects preset/prompt → clicks "Preview Ambient Sound" → hears 30-second sample → volume slider controls preview playback in real-time via HTML5 audio volume property
 - **Apply Workflow**: User adjusts volume slider to desired level → clicks "Apply to Video" → system mixes at current slider volume
 - Volume slider always controls final mixing level (can be adjusted after preview without re-previewing)
 - Polling updates status every 3 seconds until completion

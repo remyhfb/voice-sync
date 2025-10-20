@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { FileUploadZone } from "@/components/file-upload-zone";
 import { ProcessingTimeline, ProcessingStep } from "@/components/processing-timeline";
@@ -27,6 +27,7 @@ export default function CreatePage() {
   const [ambientVolume, setAmbientVolume] = useState<number>(15);
   const [successAlertDismissed, setSuccessAlertDismissed] = useState(false);
   const { toast } = useToast();
+  const audioPreviewRef = useRef<HTMLAudioElement>(null);
 
   const { data: currentJob } = useQuery<ProcessingJob>({
     queryKey: ["/api/jobs", currentJobId],
@@ -42,6 +43,14 @@ export default function CreatePage() {
       return job && job.status === "processing" ? 2000 : false;
     },
   });
+
+  // Sync the audio preview volume with the slider in real-time
+  useEffect(() => {
+    if (audioPreviewRef.current) {
+      // Convert 0-100 percentage to 0-1 decimal for HTML5 audio
+      audioPreviewRef.current.volume = ambientVolume / 100;
+    }
+  }, [ambientVolume]);
 
   const processVideoMutation = useMutation({
     mutationFn: async (data: { videoFile: File; audioFile: File }) => {
@@ -682,6 +691,7 @@ export default function CreatePage() {
                           <div className="space-y-3 p-4 border rounded-lg bg-card">
                             <h3 className="text-sm font-semibold">Preview: {currentJob.metadata.ambientEnhancement.customPrompt || `${currentJob.metadata.ambientEnhancement.preset} ambience`}</h3>
                             <audio 
+                              ref={audioPreviewRef}
                               controls 
                               className="w-full"
                               data-testid="audio-preview-player"
