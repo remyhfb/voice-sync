@@ -5,7 +5,7 @@ import { promises as fs } from "fs";
 import { createWriteStream } from "fs";
 import { storage } from "./storage";
 import { ElevenLabsService } from "./elevenlabs";
-import { FFmpegService } from "./ffmpeg";
+import { FFmpegService, getActiveVideoPath } from "./ffmpeg";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { SyncLabsService } from "./synclabs";
 import { SegmentAligner } from "./segment-aligner";
@@ -251,6 +251,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Step 5: Time-stretch video segments (50-75%)
           logger.info(`Job:${job.id}`, "Time-stretching video to match user timing");
           
+          // Get active video path (trimmed if available, otherwise original)
+          const activeVideoPath = getActiveVideoPath(job);
+          if (!activeVideoPath) {
+            throw new Error("No video path available");
+          }
+          
           for (let i = 0; i < alignments.length; i++) {
             const alignment = alignments[i];
             const segmentPath = `/tmp/uploads/${job.id}_seg_${i}.mp4`;
@@ -258,7 +264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             // Extract video segment (no audio)
             await ffmpegService.extractVideoSegment(
-              videoFile.path,
+              activeVideoPath,
               segmentPath,
               alignment.veoSegment.start,
               alignment.veoSegment.end
