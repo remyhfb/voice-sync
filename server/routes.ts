@@ -214,28 +214,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
             metadata: currentMetadata
           });
 
-          // Step 3: Transcribe both with Whisper (20-40%)
+          // Step 2.7: Normalize user audio to -14 LUFS (20-25%)
+          logger.info(`Job:${job.id}`, "Normalizing user audio to -14 LUFS (YouTube standard)");
+          const normalizedUserAudioPath = `/tmp/uploads/${job.id}_normalized_user.mp3`;
+          
+          await ffmpegService.normalizeAudioLoudness(trimmedUserAudioPath, normalizedUserAudioPath, {
+            targetLoudness: -14,  // YouTube standard
+            truePeak: -1.0,       // Prevent clipping
+            loudnessRange: 7.0    // Natural dynamic range for speech
+          });
+          
+          logger.info(`Job:${job.id}`, "Audio normalization complete");
+          await storage.updateProcessingJob(job.id, { progress: 25 });
+
+          // Step 3: Transcribe both with Whisper (25-45%)
           logger.info(`Job:${job.id}`, "Transcribing audio with Whisper");
           const aligner = new SegmentAligner();
           
           const [veoSegments, userSegments] = await Promise.all([
             aligner.extractSegments(trimmedVeoAudioPath),
-            aligner.extractSegments(trimmedUserAudioPath)
+            aligner.extractSegments(normalizedUserAudioPath)
           ]);
           
           logger.info(`Job:${job.id}`, "Transcription complete", { 
             veoSegments: veoSegments.length, 
             userSegments: userSegments.length 
           });
-          await storage.updateProcessingJob(job.id, { progress: 40 });
+          await storage.updateProcessingJob(job.id, { progress: 45 });
 
-          // Step 4: Align segments and calculate time-stretch ratios (40-45%)
+          // Step 4: Align segments and calculate time-stretch ratios (45-50%)
           logger.info(`Job:${job.id}`, "Aligning segments and calculating time-stretch ratios");
           const alignments = await aligner.alignSegments(veoSegments, userSegments);
           
-          await storage.updateProcessingJob(job.id, { progress: 45 });
+          await storage.updateProcessingJob(job.id, { progress: 50 });
 
-          // Step 5: Time-stretch video segments (45-70%)
+          // Step 5: Time-stretch video segments (50-75%)
           logger.info(`Job:${job.id}`, "Time-stretching video to match user timing");
           
           for (let i = 0; i < alignments.length; i++) {
@@ -261,16 +274,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
               segmentPaths.push(segmentPath);
             }
             
-            const progressPercent = 45 + Math.floor((i / alignments.length) * 25);
+            const progressPercent = 50 + Math.floor((i / alignments.length) * 25);
             await storage.updateProcessingJob(job.id, { progress: progressPercent });
           }
 
           // Concatenate time-stretched segments
           logger.info(`Job:${job.id}`, "Concatenating time-stretched segments", { count: segmentPaths.length });
           await ffmpegService.concatenateVideoSegments(segmentPaths, timeStretchedVideoPath);
-          await storage.updateProcessingJob(job.id, { progress: 70 });
+          await storage.updateProcessingJob(job.id, { progress: 75 });
 
-          // Step 6: Apply Sync Labs lip-sync (70-90%)
+          // Step 6: Apply Sync Labs lip-sync (75-95%)
           logger.info(`Job:${job.id}`, "Uploading video and audio to GCS for Sync Labs");
           const objectStorageService = new ObjectStorageService();
           
@@ -289,10 +302,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Generate signed GET URL (1 hour TTL) for Sync Labs to download
           const videoReadUrl = await objectStorageService.getSignedReadURL(videoUploadUrl, 3600);
           
-          // Upload cleaned audio for Sync Labs
+          // Upload normalized audio for Sync Labs
           const audioUploadUrl = await objectStorageService.getObjectEntityUploadURL();
-          const audioBuffer = await fs.readFile(cleanedUserAudioPath);
-          const audioStats = await fs.stat(cleanedUserAudioPath);
+          const audioBuffer = await fs.readFile(normalizedUserAudioPath);
+          const audioStats = await fs.stat(normalizedUserAudioPath);
           await fetch(audioUploadUrl, {
             method: 'PUT',
             body: audioBuffer,
@@ -324,7 +337,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const convertedAudioPath = `/objects/uploads/${userAudioObjectId}`;
           
           await storage.updateProcessingJob(job.id, { 
-            progress: 75,
+            progress: 80,
             extractedAudioPath,
             convertedAudioPath
           });
@@ -352,9 +365,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await ffmpegService.reencodeForBrowser(rawLipsyncedPath, lipsyncedVideoPath);
           await fs.unlink(rawLipsyncedPath).catch(() => {});
           
-          await storage.updateProcessingJob(job.id, { progress: 90 });
+          await storage.updateProcessingJob(job.id, { progress: 95 });
 
-          // Step 7: Upload final video (90-100%)
+          // Step 7: Upload final video (95-100%)
           logger.info(`Job:${job.id}`, "Uploading final video");
           const finalVideoUploadUrl = await objectStorageService.getObjectEntityUploadURL();
           const finalBuffer = await fs.readFile(lipsyncedVideoPath);
@@ -432,6 +445,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await fs.unlink(cleanedUserAudioPath).catch(() => {});
           await fs.unlink(`/tmp/uploads/${job.id}_trimmed_user.mp3`).catch(() => {});
           await fs.unlink(`/tmp/uploads/${job.id}_trimmed_veo.mp3`).catch(() => {});
+          await fs.unlink(`/tmp/uploads/${job.id}_normalized_user.mp3`).catch(() => {});
           await fs.unlink(timeStretchedVideoPath).catch(() => {});
           await fs.unlink(lipsyncedVideoPath).catch(() => {});
           for (const segPath of segmentPaths) {
