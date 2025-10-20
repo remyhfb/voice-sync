@@ -86,6 +86,7 @@ An optional feature that applies acoustic effects to the voice audio using FFmpe
 - **Small Room**: Short, tight reverb for intimate acoustic
 - **Cathedral**: Very large reverb with very long tail for massive space
 - **Stadium**: Medium-long reverb with early reflections for arena sound
+- **Outdoor**: Minimal reverb with high-frequency rolloff for open air ambience
 - **Telephone**: Band-pass filter (300Hz - 3400Hz) for classic phone effect
 - **Radio**: Band-pass with resonance (200Hz - 5000Hz) for AM radio sound
 
@@ -99,14 +100,14 @@ An optional feature that applies acoustic effects to the voice audio using FFmpe
 **API Endpoint:**
 - `POST /api/jobs/:jobId/apply-voice-filter`
   - Request body: `{ preset: string, mix: number }`
-  - Preset validation: Must be one of the 6 available presets
+  - Preset validation: Must be one of the 7 available presets
   - Mix range: 0-100 (converted to 0.0-1.0 decimal for FFmpeg, representing effect strength)
   - Runs asynchronously in background
   - Stores video path with effect, preset, and strength level in job metadata under `voiceFilter`
 
 **UI Flow:**
 - After successful lip-sync completion (with or without ambient enhancement), user sees:
-  - Preset selector dropdown (6 options)
+  - Preset selector dropdown (7 options)
   - Effect strength slider (0-100%, default 50%)
 - **Apply Workflow**: User selects preset and adjusts strength → clicks "Apply Voice Effect" → system processes video with selected effect
 - Polling updates status every 3 seconds until completion

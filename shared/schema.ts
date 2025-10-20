@@ -99,7 +99,7 @@ export const processingJobs = pgTable("processing_jobs", {
     };
     voiceFilter?: {
       status: "processing" | "completed" | "failed";
-      preset?: "concert_hall" | "small_room" | "cathedral" | "telephone" | "radio" | "stadium";
+      preset?: "concert_hall" | "small_room" | "cathedral" | "telephone" | "radio" | "stadium" | "outdoor";
       mix?: number; // 0-100, how much filter to apply
       enhancedVideoPath?: string;
       errorMessage?: string;
@@ -145,7 +145,7 @@ export const enhanceAmbientSchema = z.object({
 export type EnhanceAmbientRequest = z.infer<typeof enhanceAmbientSchema>;
 
 // Voice filter request schema
-export const VOICE_FILTER_PRESETS = ["concert_hall", "small_room", "cathedral", "telephone", "radio", "stadium"] as const;
+export const VOICE_FILTER_PRESETS = ["concert_hall", "small_room", "cathedral", "telephone", "radio", "stadium", "outdoor"] as const;
 export type VoiceFilterPreset = typeof VOICE_FILTER_PRESETS[number];
 
 export const applyVoiceFilterSchema = z.object({

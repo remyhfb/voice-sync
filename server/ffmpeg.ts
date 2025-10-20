@@ -578,7 +578,7 @@ export class FFmpegService {
     videoPath: string,
     outputPath: string,
     options: {
-      preset: "concert_hall" | "small_room" | "cathedral" | "telephone" | "radio" | "stadium";
+      preset: "concert_hall" | "small_room" | "cathedral" | "telephone" | "radio" | "stadium" | "outdoor";
       mix: number; // 0-100, how much effect to apply
     }
   ): Promise<void> {
@@ -623,6 +623,12 @@ export class FFmpegService {
       case "radio":
         // Band-pass with slight resonance (like AM radio)
         audioFilter = `highpass=f=200,lowpass=f=5000,equalizer=f=2500:width_type=h:width=1000:g=3`;
+        break;
+      
+      case "outdoor":
+        // Minimal reverb with high-frequency rolloff to simulate open air
+        // Very short delay (30-80ms) with subtle decay, plus gentle high-freq reduction
+        audioFilter = `aecho=0.6:0.5:30|80:0.15|0.1,highpass=f=100,lowpass=f=12000`;
         break;
       
       default:
