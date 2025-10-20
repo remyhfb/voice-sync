@@ -167,6 +167,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "No video available for this job" });
       }
 
+      // Extract bucket name from PRIVATE_OBJECT_DIR
+      const privateObjectDir = process.env.PRIVATE_OBJECT_DIR || "";
+      const bucketName = privateObjectDir.split('/')[1]; // /bucket-name/.private -> bucket-name
+      
+      if (!bucketName) {
+        return res.status(500).json({ error: "Object storage not configured" });
+      }
+
       // Extract full object path from /objects/uploads/<id> -> uploads/<id>
       const pathParts = videoPath.split('/');
       const uploadsIndex = pathParts.indexOf('uploads');
@@ -179,7 +187,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate signed URL with full object path
       const objectStorageService = new ObjectStorageService();
       const signedUrl = await objectStorageService.getSignedReadURL(
-        `https://storage.googleapis.com/${process.env.BUCKET_ID}/${objectPath}`,
+        `https://storage.googleapis.com/${bucketName}/${objectPath}`,
         3600 // 1 hour TTL
       );
 

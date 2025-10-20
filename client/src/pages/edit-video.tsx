@@ -41,10 +41,10 @@ export default function EditVideoPage() {
 
   // Fetch signed URL for video playback
   const { data: videoUrlData } = useQuery<{ downloadUrl: string }>({
-    queryKey: ["/api/jobs", jobId, "download-url"],
+    queryKey: ["/api/jobs", jobId, "download-video-url"],
     queryFn: async () => {
       if (!jobId || !job) throw new Error("No job ID");
-      const response = await fetch(`/api/jobs/${jobId}/download-url`);
+      const response = await fetch(`/api/jobs/${jobId}/download-video-url`);
       if (!response.ok) throw new Error("Failed to fetch video URL");
       return response.json();
     },
