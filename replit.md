@@ -14,9 +14,6 @@ The frontend is built with React and TypeScript, using Vite, Wouter for routing,
 ### Backend
 The backend uses Express.js with TypeScript and ESM, following a RESTful design. It includes Multer for file uploads and FFmpeg integration for video/audio processing. The system implements a multi-step job processing pipeline with status and progress tracking.
 
-#### Audio Loudness Normalization
-All processed videos automatically receive professional loudness normalization to ensure consistent audio levels across all outputs, regardless of input volume variations. This uses two-pass EBU R128 loudness normalization targeting -14 LUFS (YouTube/streaming platform standard) with true peak limiting at -1.5 dB and loudness range of 11 LU. The normalization happens automatically during the final browser re-encoding step, ensuring professional audio quality without user configuration.
-
 ### Data Storage
 PostgreSQL, accessed via Neon serverless driver and Drizzle ORM, handles persistent data for voice clones and processing jobs. Google Cloud Storage is integrated for scalable object storage of uploaded videos, extracted audio, and generated files with ACL support.
 
