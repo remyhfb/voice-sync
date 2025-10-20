@@ -596,16 +596,24 @@ export class FFmpegService {
     
     switch (preset) {
       case "concert_hall":
-        audioFilter = `aecho=0.8:0.9:1000|1800:0.3|0.25`;
+        // Concert hall: RT60 ~2s, warm/balanced, medium early reflections (20-40ms)
+        // Multiple early reflections + long smooth tail, subtle low-freq boost for warmth
+        audioFilter = `aecho=0.6:0.8:25|45|80|150|300|600:0.5|0.4|0.35|0.3|0.25|0.2,equalizer=f=200:width_type=h:width=100:g=2`;
         break;
       case "cathedral":
-        audioFilter = `aecho=0.8:0.9:1500|2500|3500:0.4|0.3|0.2`;
+        // Cathedral: RT60 ~6s, massive space, very long decay, strong low-freq buildup
+        // Long delays (50-100ms early reflections) + extremely long tail
+        audioFilter = `aecho=0.5:0.9:60|120|200|400|800|1600|3200:0.8|0.75|0.7|0.65|0.6|0.5|0.4,equalizer=f=150:width_type=h:width=80:g=4`;
         break;
       case "small_room":
+        // Small room: RT60 ~0.3s, tight/intimate, very short reflections (5-15ms)
+        // Keep existing - this one works well
         audioFilter = `aecho=0.8:0.88:60|122:0.4|0.3`;
         break;
       case "stadium":
-        audioFilter = `aecho=0.8:0.9:500|1000|2000:0.35|0.3|0.25`;
+        // Stadium: RT60 ~1.5s, bright/harsh, strong early reflections from hard surfaces
+        // Short punchy delays (10-30ms) + high-freq emphasis for concrete character
+        audioFilter = `aecho=0.7:0.85:12|28|55|110|220|450:0.6|0.5|0.4|0.3|0.25|0.2,equalizer=f=3000:width_type=h:width=1000:g=3`;
         break;
       case "telephone":
         // Narrow telephone band-pass with mid boost and volume normalization
@@ -701,23 +709,27 @@ export class FFmpegService {
     
     switch (preset) {
       case "concert_hall":
-        // Large reverb with long tail
-        audioFilter = `aecho=0.8:0.9:1000|1800:0.3|0.25`;
+        // Concert hall: RT60 ~2s, warm/balanced, medium early reflections (20-40ms)
+        // Multiple early reflections + long smooth tail, subtle low-freq boost for warmth
+        audioFilter = `aecho=0.6:0.8:25|45|80|150|300|600:0.5|0.4|0.35|0.3|0.25|0.2,equalizer=f=200:width_type=h:width=100:g=2`;
         break;
       
       case "cathedral":
-        // Very large reverb with very long tail
-        audioFilter = `aecho=0.8:0.9:1500|2500|3500:0.4|0.3|0.2`;
+        // Cathedral: RT60 ~6s, massive space, very long decay, strong low-freq buildup
+        // Long delays (50-100ms early reflections) + extremely long tail
+        audioFilter = `aecho=0.5:0.9:60|120|200|400|800|1600|3200:0.8|0.75|0.7|0.65|0.6|0.5|0.4,equalizer=f=150:width_type=h:width=80:g=4`;
         break;
       
       case "small_room":
-        // Short, tight reverb
+        // Small room: RT60 ~0.3s, tight/intimate, very short reflections (5-15ms)
+        // Keep existing - this one works well
         audioFilter = `aecho=0.8:0.88:60|122:0.4|0.3`;
         break;
       
       case "stadium":
-        // Medium-long reverb with some early reflections
-        audioFilter = `aecho=0.8:0.9:500|1000|2000:0.35|0.3|0.25`;
+        // Stadium: RT60 ~1.5s, bright/harsh, strong early reflections from hard surfaces
+        // Short punchy delays (10-30ms) + high-freq emphasis for concrete character
+        audioFilter = `aecho=0.7:0.85:12|28|55|110|220|450:0.6|0.5|0.4|0.3|0.25|0.2,equalizer=f=3000:width_type=h:width=1000:g=3`;
         break;
       
       case "telephone":

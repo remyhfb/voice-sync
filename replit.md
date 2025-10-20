@@ -82,26 +82,24 @@ A simplified optional feature that adds professional ambient atmosphere to the f
 An optional feature that applies acoustic effects to the voice audio using FFmpeg's built-in audio filters. No external APIs required - all processing happens server-side using FFmpeg.
 
 **Available Effect Presets:**
-- **Concert Hall**: Large reverb with long tail for spacious sound
-- **Small Room**: Short, tight reverb for intimate acoustic
-- **Cathedral**: Very large reverb with very long tail for massive space
-- **Stadium**: Medium-long reverb with early reflections for arena sound
-- **Outdoor**: Minimal reverb with high-frequency rolloff for open air ambience (experimental)
-- **Outdoors - Pro**: Professional outdoor acoustic based on audio engineering standards (70-100ms pre-delay, 400Hz HPF, 2.5kHz LPF for authentic air absorption)
-- **Telephone**: Band-pass filter (300Hz - 3400Hz) for classic phone effect
-- **Radio**: Band-pass with resonance (200Hz - 5000Hz) for AM radio sound
+Reverb effects are designed using professional acoustic engineering standards for RT60 (reverberation time) and early reflection patterns:
+
+- **Concert Hall**: RT60 ~2.0s, warm/balanced character with medium early reflections (20-40ms). Multiple echo taps with progressive decay and subtle low-frequency boost for warmth.
+- **Small Room**: RT60 ~0.3s, tight/intimate character with very short reflections (5-15ms). Fast, tight reverb for close acoustic spaces.
+- **Cathedral**: RT60 ~6.0s, massive space with very long decay and strong low-frequency buildup. Long delays (50-100ms early reflections) for authentic large stone chamber acoustic.
+- **Stadium**: RT60 ~1.5s, bright/harsh character with strong early reflections from hard surfaces. Short punchy delays (10-30ms) with high-frequency emphasis for concrete arena sound.
+- **Outdoor**: Minimal reverb with high-frequency rolloff for open air ambience (experimental). Short delays with gentle high-frequency reduction.
+- **Outdoors - Pro**: Professional outdoor acoustic based on audio engineering research. 70-100ms pre-delay, 400Hz HPF, 2.5kHz LPF for authentic outdoor air absorption and mid-range focus.
+- **Telephone**: Narrow band-pass (500-2800Hz) with mid-frequency boost at 1800Hz and volume normalization for classic telephone sound.
+- **Radio**: AM radio effect with band-pass (400-3500Hz), resonant mid boost at 2000Hz, and slight volume increase for radio character.
 
 **Technical Implementation:**
-- **FFmpeg Audio Filters**: Uses `aecho` for reverb effects, `highpass`/`lowpass` for telephone/radio effects
-- **Strength Control**: User-adjustable slider (0-100%) controls effect strength - 0% = original voice, 100% = full effect
-- **No External API**: All processing server-side using FFmpeg built-in filters
-- **Applies to Best Available Video**: Uses ambient-enhanced video if available, otherwise uses lip-synced video
-- **Implementation Note**: Uses `child_process.spawn()` directly instead of fluent-ffmpeg to ensure proper argument escaping for complex filter chains. The amix filter uses `weights` parameter only (normalize option not available in this FFmpeg version).
-
-**Outdoor Effect Comparison:**
-The system offers two outdoor presets for A/B testing:
-- **Outdoor (Experimental)**: 30-80ms delay, 100Hz-12kHz filtering - more subtle, brighter sound
-- **Outdoors - Pro**: 70-100ms delay, 400Hz-2.5kHz filtering - follows professional audio engineering research with aggressive high-frequency rolloff for authentic outdoor air absorption and mid-range focus
+- **FFmpeg Audio Filters**: Uses `aecho` for reverb effects with frequency shaping via `equalizer`. Telephone/radio use `highpass`/`lowpass` with `equalizer` and `volume` filters.
+- **Acoustic Standards**: Reverb presets based on professional RT60 measurements and early reflection timing for each space type.
+- **Strength Control**: User-adjustable slider (0-100%) controls wet/dry mix using comma-separated amix weights - 0% = original voice, 100% = full effect.
+- **No External API**: All processing server-side using FFmpeg built-in filters.
+- **Applies to Best Available Video**: Uses ambient-enhanced video if available, otherwise uses lip-synced video.
+- **Implementation Note**: Uses `child_process.spawn()` directly instead of fluent-ffmpeg to ensure proper argument escaping for complex filter chains.
 
 **API Endpoints:**
 - `POST /api/jobs/:jobId/preview-voice-effect`
