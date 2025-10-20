@@ -1,0 +1,59 @@
+Problem Statement for Replacement Agent
+Feature: Voice Filter (Pipeline 4) - Apply acoustic effects to lip-synced videos using FFmpeg audio filters
+
+Status: Completely non-functional after 10+ attempted fixes
+
+Error:
+
+FFmpeg voice filter error: ffmpeg exited with code 1: Error initializing complex filters. Option not found
+Root Cause:
+The fluent-ffmpeg library (v2.1.2) is not properly quoting/escaping the -filter_complex parameter, causing FFmpeg to fail parsing.
+
+Evidence:
+
+Generated command (FAILS):
+ffmpeg -i input.mp4 -y -filter_complex [0:a]asplit=2[dry][wet];[wet]aecho=0.8:0.9:1000|1800:0.3|0.25[wet_processed];[dry][wet_processed]amix=inputs=2:weights='0.50 0.50':normalize=0[aout] -map [aout] -map 0:v -c:v copy -c:a aac -b:a 192k output.mp4
+Problem: No quotes around filter_complex value, semicolons/pipes interpreted as shell separators
+
+Manual test (WORKS):
+cd /tmp && ffmpeg -i test_voice_filter.mp4 -y -filter_complex "[0:a]asplit=2[dry][wet];[wet]aecho=0.8:0.9:1000|1800:0.3|0.25[wet_processed];[dry][wet_processed]amix=inputs=2:weights='0.50 0.50':normalize=0[aout]" -map 0:v -map "[aout]" -c:v copy -c:a aac -b:a 192k test_filtered_output.mp4
+# Output: size=69kB time=00:00:03.80 - SUCCESS ✅
+Code Location: server/ffmpeg.ts:637-664 (method applyVoiceFilter)
+
+Current Implementation:
+
+const filterComplex = `[0:a]asplit=2[dry][wet];[wet]${audioFilter}[wet_processed];[dry][wet_processed]amix=inputs=2:weights='${dryWeight} ${wetWeight}':normalize=0[aout]`;
+ffmpeg()
+  .input(videoPath)
+  .complexFilter(filterComplex, 'aout')  // Documented API usage
+  .outputOptions(['-map', '0:v', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k'])
+  .output(outputPath)
+Approaches Tried (All Failed):
+
+Single concatenated string
+Array of filter strings
+Object format per documentation
+With/without second parameter to .complexFilter()
+Manual -map in outputOptions
+Automatic mapping via second parameter
+Documentation Consulted:
+
+fluent-ffmpeg README.md (node_modules/fluent-ffmpeg/README.md lines 719-800)
+GitHub Issue #801 (filter_complex via outputOptions doesn't work)
+FFmpeg amix filter docs (https://ffmpeg.org/ffmpeg-filters.html#amix)
+Recommendation for Next Agent:
+Consider bypassing fluent-ffmpeg's .complexFilter() entirely. Options:
+
+Use child_process.spawn() to call FFmpeg directly with proper shell quoting
+Try passing via .outputOptions(['-filter_complex', 'quoted_string']) despite documentation saying it won't work
+Research if fluent-ffmpeg has a known bug with complex filtergraphs containing semicolons/pipes
+Test Files Available:
+
+/tmp/test_voice_filter.mp4 - Test video file
+Working manual command proven in /tmp/test_filtered_output.mp4
+Working Features (For Reference):
+
+Lip-sync pipeline (uses FFmpeg successfully for video time-stretching, concatenation)
+Ambient enhancement (uses FFmpeg for audio mixing - see implementation for comparison)
+Latest Error Log:
+/tmp/logs/Start_application_20251020_030406_836.log at timestamp 3:02:49 AM
