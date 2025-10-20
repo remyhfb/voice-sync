@@ -92,6 +92,7 @@ export const processingJobs = pgTable("processing_jobs", {
       preset?: "office" | "cafe" | "nature" | "city" | "studio" | "home";
       customPrompt?: string;
       ambientPrompt?: string;
+      volume?: number;
       previewAudioPath?: string;
       enhancedVideoPath?: string;
       errorMessage?: string;

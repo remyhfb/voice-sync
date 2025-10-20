@@ -781,6 +781,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 preset: result.preset,
                 customPrompt: result.customPrompt,
                 ambientPrompt: result.ambientPrompt,
+                volume,
                 enhancedVideoPath
               }
             }
@@ -788,7 +789,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           logger.info(`Job:${jobId}`, "Ambient sound enhancement complete", {
             preset: result.preset,
-            customPrompt: result.customPrompt
+            customPrompt: result.customPrompt,
+            volume
           });
         } catch (error: any) {
           logger.error(`Job:${jobId}`, "Ambient sound enhancement failed", error);
