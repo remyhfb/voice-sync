@@ -39,6 +39,18 @@ export default function EditVideoPage() {
     enabled: !!jobId,
   });
 
+  // Fetch signed URL for video playback
+  const { data: videoUrlData } = useQuery<{ downloadUrl: string }>({
+    queryKey: ["/api/jobs", jobId, "download-url"],
+    queryFn: async () => {
+      if (!jobId || !job) throw new Error("No job ID");
+      const response = await fetch(`/api/jobs/${jobId}/download-url`);
+      if (!response.ok) throw new Error("Failed to fetch video URL");
+      return response.json();
+    },
+    enabled: !!jobId && !!job,
+  });
+
   // Show error toast if job fetch fails
   useEffect(() => {
     if (error) {
@@ -73,14 +85,24 @@ export default function EditVideoPage() {
     }
   };
 
-  const togglePlayPause = () => {
+  const togglePlayPause = async () => {
     if (videoRef.current) {
       if (isPlaying) {
         videoRef.current.pause();
+        setIsPlaying(false);
       } else {
-        videoRef.current.play();
+        try {
+          await videoRef.current.play();
+          setIsPlaying(true);
+        } catch (error) {
+          console.error("Failed to play video:", error);
+          toast({
+            title: "Playback error",
+            description: "Unable to play video. Please try again.",
+            variant: "destructive",
+          });
+        }
       }
-      setIsPlaying(!isPlaying);
     }
   };
 
@@ -144,7 +166,7 @@ export default function EditVideoPage() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  if (isLoading) {
+  if (isLoading || !videoUrlData) {
     return (
       <div className="flex items-center justify-center h-full">
         <p className="text-muted-foreground">Loading video...</p>
@@ -160,7 +182,7 @@ export default function EditVideoPage() {
     );
   }
 
-  const videoPath = job.metadata?.trimmedVideoPath || job.videoPath;
+  const videoPath = videoUrlData.downloadUrl;
 
   return (
     <div className="space-y-6">
