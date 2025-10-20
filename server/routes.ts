@@ -215,16 +215,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
 
           // Step 2.7: Normalize user audio to -14 LUFS (20-25%)
-          logger.info(`Job:${job.id}`, "Normalizing user audio to -14 LUFS (YouTube standard)");
-          const normalizedUserAudioPath = `/tmp/uploads/${job.id}_normalized_user.mp3`;
-          
-          await ffmpegService.normalizeAudioLoudness(trimmedUserAudioPath, normalizedUserAudioPath, {
-            targetLoudness: -14,  // YouTube standard
-            truePeak: -1.0,       // Prevent clipping
-            loudnessRange: 7.0    // Natural dynamic range for speech
-          });
-          
-          logger.info(`Job:${job.id}`, "Audio normalization complete");
+          // TEMPORARILY DISABLED FOR TESTING
+          logger.info(`Job:${job.id}`, "SKIPPING normalization for testing");
+          const normalizedUserAudioPath = trimmedUserAudioPath; // Use trimmed audio directly
           await storage.updateProcessingJob(job.id, { progress: 25 });
 
           // Step 3: Transcribe both with Whisper (25-45%)

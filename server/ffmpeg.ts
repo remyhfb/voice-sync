@@ -411,8 +411,8 @@ export class FFmpegService {
 
   /**
    * Normalize audio to target loudness level using EBU R128 loudness normalization
+   * Uses two-pass approach for accurate normalization and metadata preservation
    * Targets -14 LUFS (YouTube standard) for consistent volume levels
-   * Ensures proper metadata (duration) is embedded for API compatibility
    */
   async normalizeAudioLoudness(
     inputPath: string,
@@ -427,27 +427,97 @@ export class FFmpegService {
     const truePeak = options.truePeak ?? -1.0;              // Prevent clipping
     const loudnessRange = options.loudnessRange ?? 7.0;     // Natural dynamic range
 
-    logger.debug("FFmpeg", "Normalizing audio loudness", {
+    logger.debug("FFmpeg", "Normalizing audio loudness (two-pass)", {
       target: `${targetLoudness} LUFS`,
       truePeak: `${truePeak} dBTP`,
       loudnessRange: `${loudnessRange} LU`
     });
 
+    // Two-pass loudnorm: measure first, then apply with measured values
+    return new Promise((resolve, reject) => {
+      let measuredValues = '';
+      
+      // Pass 1: Measure loudness
+      ffmpeg(inputPath)
+        .audioFilters(`loudnorm=I=${targetLoudness}:TP=${truePeak}:LRA=${loudnessRange}:print_format=json`)
+        .outputOptions(['-f', 'null'])
+        .output('-')
+        .on('stderr', (stderrLine) => {
+          // Capture loudnorm measurements from stderr
+          measuredValues += stderrLine;
+        })
+        .on('end', () => {
+          // Parse measured values from JSON output
+          const jsonMatch = measuredValues.match(/\{[^}]*"input_i"[^}]*\}/);
+          if (!jsonMatch) {
+            // If measurement fails, fall back to single-pass
+            logger.warn("FFmpeg", "Two-pass measurement failed, using single-pass normalization");
+            this.normalizeSinglePass(inputPath, outputPath, targetLoudness, truePeak, loudnessRange)
+              .then(resolve)
+              .catch(reject);
+            return;
+          }
+
+          const measured = JSON.parse(jsonMatch[0]);
+          
+          // Pass 2: Apply normalization with measured values
+          ffmpeg(inputPath)
+            .audioFilters(
+              `loudnorm=I=${targetLoudness}:TP=${truePeak}:LRA=${loudnessRange}:` +
+              `measured_I=${measured.input_i}:measured_LRA=${measured.input_lra}:` +
+              `measured_TP=${measured.input_tp}:measured_thresh=${measured.input_thresh}:linear=true`
+            )
+            .outputOptions([
+              '-f', 'mp3',
+              '-acodec', 'libmp3lame',
+              '-ar', '48000',
+              '-ac', '2',
+              '-ab', '192k',
+              '-map_metadata', '0',
+              '-id3v2_version', '3'
+            ])
+            .output(outputPath)
+            .on('end', () => {
+              logger.info("FFmpeg", "Two-pass audio normalization complete", { targetLoudness: `${targetLoudness} LUFS` });
+              resolve();
+            })
+            .on('error', (err: any) => {
+              reject(new Error(`FFmpeg normalization error (pass 2): ${err.message}`));
+            })
+            .run();
+        })
+        .on('error', (err: any) => {
+          reject(new Error(`FFmpeg normalization error (pass 1): ${err.message}`));
+        })
+        .run();
+    });
+  }
+
+  /**
+   * Single-pass normalization fallback
+   */
+  private normalizeSinglePass(
+    inputPath: string,
+    outputPath: string,
+    targetLoudness: number,
+    truePeak: number,
+    loudnessRange: number
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
       ffmpeg(inputPath)
         .audioFilters(`loudnorm=I=${targetLoudness}:TP=${truePeak}:LRA=${loudnessRange}`)
         .outputOptions([
-          '-f', 'mp3',          // Force MP3 format
+          '-f', 'mp3',
           '-acodec', 'libmp3lame',
-          '-ar', '48000',       // 48kHz sample rate (Sync Labs recommended)
-          '-ac', '2',           // Stereo
-          '-ab', '192k',        // 192kbps bitrate
-          '-map_metadata', '0', // Preserve input metadata (including duration)
-          '-id3v2_version', '3' // Use ID3v2.3 for maximum compatibility
+          '-ar', '48000',
+          '-ac', '2',
+          '-ab', '192k',
+          '-map_metadata', '0',
+          '-id3v2_version', '3'
         ])
         .output(outputPath)
         .on('end', () => {
-          logger.info("FFmpeg", "Audio normalization complete", { targetLoudness: `${targetLoudness} LUFS` });
+          logger.info("FFmpeg", "Single-pass audio normalization complete", { targetLoudness: `${targetLoudness} LUFS` });
           resolve();
         })
         .on('error', (err: any) => {
