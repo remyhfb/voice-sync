@@ -641,10 +641,10 @@ export class FFmpegService {
     return new Promise((resolve, reject) => {
       ffmpeg()
         .input(videoPath)
-        .complexFilter(filterComplex)  // No second param - avoid auto-mapping
+        .complexFilter(filterComplex, 'aout')  // Map output stream per docs
         .outputOptions([
           '-map', '0:v',      // Use video from input
-          '-map', '[aout]',   // Use filtered+mixed audio
+          // complexFilter's second param handles audio mapping
           '-c:v', 'copy',     // Copy video codec (no re-encode)
           '-c:a', 'aac',      // Encode audio as AAC
           '-b:a', '192k'      // Audio bitrate
