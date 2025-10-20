@@ -673,8 +673,8 @@ export class FFmpegService {
     const dryWeight = (1 - mixDecimal).toFixed(2);
     const wetWeight = mixDecimal.toFixed(2);
     
-    // Use comma-separated weights for FFmpeg amix filter
-    const filterComplex = `[0:a]asplit=2[dry][wet];[wet]${audioFilter}[wet_processed];[dry][wet_processed]amix=inputs=2:weights=${dryWeight},${wetWeight}[aout]`;
+    // Use space-separated weights for FFmpeg amix filter
+    const filterComplex = `[0:a]asplit=2[dry][wet];[wet]${audioFilter}[wet_processed];[dry][wet_processed]amix=inputs=2:weights=${dryWeight} ${wetWeight}[aout]`;
 
     return new Promise((resolve, reject) => {
       const args = [
@@ -825,8 +825,8 @@ export class FFmpegService {
     const dryWeight = (1 - mixDecimal).toFixed(2);
     const wetWeight = mixDecimal.toFixed(2);
     
-    // Use comma-separated weights for FFmpeg amix filter (not space-separated)
-    const filterComplex = `[0:a]asplit=2[dry][wet];[wet]${audioFilter}[wet_processed];[dry][wet_processed]amix=inputs=2:weights=${dryWeight},${wetWeight}[aout]`;
+    // Use space-separated weights for FFmpeg amix filter
+    const filterComplex = `[0:a]asplit=2[dry][wet];[wet]${audioFilter}[wet_processed];[dry][wet_processed]amix=inputs=2:weights=${dryWeight} ${wetWeight}[aout]`;
 
     logger.debug("FFmpeg", "Filter complex", { filterComplex, audioFilter });
 
