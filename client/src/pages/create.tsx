@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, Loader2, Download, RotateCcw, BarChart3, AlertCircle, CheckCircle2, X, Volume2 } from "lucide-react";
+import { Sparkles, Loader2, Download, RotateCcw, BarChart3, AlertCircle, CheckCircle2, X, Volume2, Wand2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { ProcessingJob } from "@shared/schema";
 
@@ -586,77 +586,97 @@ export default function CreatePage() {
         </div>
 
         {!currentJob && (
-          <Card className="p-6 mb-8">
-            <h2 className="text-xl font-semibold mb-4">
-              Step 1: Upload VEO Video
-            </h2>
-            <Alert className="mb-4" data-testid="alert-veo-requirements">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Important:</strong> Remove any weird or unintended footage that your AI video generator added on its own (grunts, groans, odd expressions, etc.). Our software detects natural patterns, and AI-generated artifacts will result in poor output.
-              </AlertDescription>
-            </Alert>
-            <FileUploadZone
-              onFilesSelected={handleVideoUpload}
-              accept="video/*"
-              multiple={false}
-              maxSize={100 * 1024 * 1024}
-              title="Upload VEO Video"
-              description="Select or drag your VEO video file (MP4, MOV, AVI, WebM)"
-              icon="video"
-            />
-            {videoFile && (
-              <div className="mt-4 p-3 bg-accent/20 rounded-md">
-                <p className="text-sm font-mono">
-                  Selected: {videoFile.name} ({(videoFile.size / (1024 * 1024)).toFixed(2)} MB)
-                </p>
+          <Card className="p-8 mb-8">
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* VEO Video Upload */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground font-semibold text-sm">
+                    1
+                  </div>
+                  <h2 className="text-lg font-semibold">VEO Video</h2>
+                </div>
+                <FileUploadZone
+                  onFilesSelected={handleVideoUpload}
+                  accept="video/*"
+                  multiple={false}
+                  maxSize={100 * 1024 * 1024}
+                  title="Drop VEO video"
+                  description="MP4, MOV, AVI, WebM · Max 100MB"
+                  icon="video"
+                />
+                {videoFile && (
+                  <div className="flex items-center gap-2 p-3 bg-chart-2/10 border border-chart-2/30 rounded-md">
+                    <CheckCircle2 className="h-4 w-4 text-chart-2 flex-shrink-0" />
+                    <p className="text-sm truncate flex-1">
+                      {videoFile.name}
+                    </p>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {(videoFile.size / (1024 * 1024)).toFixed(1)}MB
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-3 w-3 text-muted-foreground mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-muted-foreground">
+                    Remove AI artifacts (grunts, odd expressions) for best results
+                  </p>
+                </div>
               </div>
-            )}
 
-            <Separator className="my-6" />
-
-            <h2 className="text-xl font-semibold mb-4">
-              Step 2: Upload Your Voice Recording
-            </h2>
-            <p className="text-sm text-muted-foreground mb-4">
-              Record yourself performing the same script as the VEO video. 
-              The AI will time-stretch the video to match your timing and apply perfect lip-sync.
-            </p>
-            <Alert className="mb-4" data-testid="alert-audio-requirements">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Important:</strong> Your audio must include every single word from the VEO video, even words you don't intend to use in the final version. You can edit later.
-              </AlertDescription>
-            </Alert>
-            <FileUploadZone
-              onFilesSelected={handleAudioUpload}
-              accept="audio/*"
-              multiple={false}
-              maxSize={50 * 1024 * 1024}
-              title="Upload Your Voice Acting"
-              description="Your audio recording matching the VEO video script (MP3, WAV, M4A)"
-              icon="audio"
-            />
-            {audioFile && (
-              <div className="mt-4 p-3 bg-accent/20 rounded-md">
-                <p className="text-sm font-mono">
-                  Audio: {audioFile.name} ({(audioFile.size / (1024 * 1024)).toFixed(2)} MB)
-                </p>
+              {/* Voice Recording Upload */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground font-semibold text-sm">
+                    2
+                  </div>
+                  <h2 className="text-lg font-semibold">Your Voice</h2>
+                </div>
+                <FileUploadZone
+                  onFilesSelected={handleAudioUpload}
+                  accept="audio/*"
+                  multiple={false}
+                  maxSize={50 * 1024 * 1024}
+                  title="Drop voice recording"
+                  description="MP3, WAV, M4A · Max 50MB"
+                  icon="audio"
+                />
+                {audioFile && (
+                  <div className="flex items-center gap-2 p-3 bg-chart-2/10 border border-chart-2/30 rounded-md">
+                    <CheckCircle2 className="h-4 w-4 text-chart-2 flex-shrink-0" />
+                    <p className="text-sm truncate flex-1">
+                      {audioFile.name}
+                    </p>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {(audioFile.size / (1024 * 1024)).toFixed(1)}MB
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-start gap-2">
+                  <Wand2 className="h-3 w-3 text-muted-foreground mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-muted-foreground">
+                    Include all words from VEO script. AI will time-stretch to match.
+                  </p>
+                </div>
               </div>
-            )}
+            </div>
 
-            <div className="mt-8 flex justify-end">
+            <div className="mt-8 flex items-center justify-between gap-4">
+              <p className="text-sm text-muted-foreground">
+                AI-powered lip-sync with perfect timing preservation
+              </p>
               <Button
                 data-testid="button-start-processing"
                 size="lg"
                 onClick={handleStartProcessing}
                 disabled={!videoFile || !audioFile || processVideoMutation.isPending}
+                className="min-w-[200px]"
               >
                 {processVideoMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {processVideoMutation.isPending ? "Starting..." : (
                   <>
                     <Sparkles className="mr-2 h-4 w-4" />
-                    Start Lip-Sync Processing
+                    Start Processing
                   </>
                 )}
               </Button>
@@ -684,7 +704,7 @@ export default function CreatePage() {
                   <Alert className="bg-chart-2/10 border-chart-2 relative" data-testid="alert-success">
                     <CheckCircle2 className="h-5 w-5 text-chart-2" />
                     <AlertDescription className="text-base pr-8">
-                      <strong>Success!</strong> Your lip-synced video is ready. If it is not perfectly synced up it means your audio was poorly paced or your video had AI artifacts that were not removed or there were inconsistencies between words in the script.
+                      <strong>Video ready!</strong> If sync isn't perfect, check for AI artifacts or pacing issues.
                     </AlertDescription>
                     <Button
                       variant="ghost"
