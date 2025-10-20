@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { Sparkles, Loader2, Download, RotateCcw, BarChart3, AlertCircle, CheckCircle2, X, Volume2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -23,6 +24,7 @@ export default function CreatePage() {
   const [enhancingAmbient, setEnhancingAmbient] = useState(false);
   const [selectedAmbientType, setSelectedAmbientType] = useState<string>("office");
   const [customAmbientPrompt, setCustomAmbientPrompt] = useState<string>("");
+  const [ambientVolume, setAmbientVolume] = useState<number>(15);
   const [successAlertDismissed, setSuccessAlertDismissed] = useState(false);
   const { toast } = useToast();
 
@@ -255,7 +257,9 @@ export default function CreatePage() {
     
     setEnhancingAmbient(true);
     try {
-      const requestBody: { preset?: string; customPrompt?: string } = {};
+      const requestBody: { preset?: string; customPrompt?: string; volume: number } = { 
+        volume: ambientVolume 
+      };
       
       if (job.metadata.ambientEnhancement.customPrompt) {
         requestBody.customPrompt = job.metadata.ambientEnhancement.customPrompt;
@@ -629,6 +633,25 @@ export default function CreatePage() {
                                 </p>
                               )}
                             </div>
+                            <div className="flex flex-col gap-2">
+                              <div className="flex items-center justify-between">
+                                <label className="text-sm font-medium">Ambient Volume</label>
+                                <span className="text-sm text-muted-foreground font-mono">{ambientVolume}%</span>
+                              </div>
+                              <Slider
+                                value={[ambientVolume]}
+                                onValueChange={(value) => setAmbientVolume(value[0])}
+                                min={0}
+                                max={100}
+                                step={5}
+                                disabled={enhancingAmbient}
+                                data-testid="slider-ambient-volume"
+                                className="w-full"
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                Adjust how loud the ambient sound will be relative to your voice
+                              </p>
+                            </div>
                             <Button 
                               size="lg" 
                               variant="secondary" 
@@ -662,8 +685,27 @@ export default function CreatePage() {
                               Your browser does not support the audio tag.
                             </audio>
                             <p className="text-xs text-muted-foreground">
-                              Listen to the preview above. If you like it, click below to add it to your video.
+                              Listen to the preview above. If you like it, adjust the volume and apply it to your video.
                             </p>
+                            <div className="flex flex-col gap-2">
+                              <div className="flex items-center justify-between">
+                                <label className="text-sm font-medium">Ambient Volume</label>
+                                <span className="text-sm text-muted-foreground font-mono">{ambientVolume}%</span>
+                              </div>
+                              <Slider
+                                value={[ambientVolume]}
+                                onValueChange={(value) => setAmbientVolume(value[0])}
+                                min={0}
+                                max={100}
+                                step={5}
+                                disabled={enhancingAmbient}
+                                data-testid="slider-ambient-volume-preview"
+                                className="w-full"
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                This volume will be applied when you add the ambient sound to your video
+                              </p>
+                            </div>
                             <div className="flex gap-3">
                               <Button 
                                 size="lg" 
