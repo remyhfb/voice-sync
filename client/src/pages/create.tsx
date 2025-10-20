@@ -25,6 +25,9 @@ export default function CreatePage() {
   const [selectedAmbientType, setSelectedAmbientType] = useState<string>("office");
   const [customAmbientPrompt, setCustomAmbientPrompt] = useState<string>("");
   const [ambientVolume, setAmbientVolume] = useState<number>(15);
+  const [applyingVoiceFilter, setApplyingVoiceFilter] = useState(false);
+  const [selectedVoiceFilter, setSelectedVoiceFilter] = useState<string>("concert_hall");
+  const [voiceFilterMix, setVoiceFilterMix] = useState<number>(50);
   const [successAlertDismissed, setSuccessAlertDismissed] = useState(false);
   const { toast } = useToast();
   const audioPreviewRef = useRef<HTMLAudioElement>(null);
@@ -350,6 +353,88 @@ export default function CreatePage() {
     }
   };
 
+  const handleApplyVoiceFilter = async () => {
+    if (!currentJobId) return;
+    
+    setApplyingVoiceFilter(true);
+    try {
+      const requestBody = { 
+        preset: selectedVoiceFilter,
+        mix: voiceFilterMix
+      };
+      
+      // Clear old voice filter data from cache before starting
+      const currentJob = queryClient.getQueryData<ProcessingJob>(["/api/jobs", currentJobId]);
+      if (currentJob) {
+        queryClient.setQueryData<ProcessingJob>(["/api/jobs", currentJobId], {
+          ...currentJob,
+          metadata: {
+            ...currentJob.metadata,
+            voiceFilter: {
+              status: "processing" as const,
+              preset: selectedVoiceFilter as any,
+              mix: voiceFilterMix
+            }
+          }
+        });
+      }
+      
+      await apiRequest("POST", `/api/jobs/${currentJobId}/apply-voice-filter`, requestBody);
+      
+      toast({
+        title: "Applying voice filter...",
+        description: "Processing your audio with the selected effect",
+      });
+
+      // Timeout after 3 minutes with notification
+      const timeout = setTimeout(() => {
+        clearInterval(pollInterval);
+        setApplyingVoiceFilter(false);
+        toast({
+          title: "Filter timed out",
+          description: "Please try again or contact support",
+          variant: "destructive",
+        });
+      }, 180000);
+
+      // Poll for updates
+      const pollInterval = setInterval(async () => {
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs", currentJobId] });
+        const job = queryClient.getQueryData<ProcessingJob>(["/api/jobs", currentJobId]);
+        
+        // Check if enhancedVideoPath is available (processing complete)
+        if (job?.metadata?.voiceFilter?.enhancedVideoPath) {
+          clearInterval(pollInterval);
+          clearTimeout(timeout);
+          setApplyingVoiceFilter(false);
+          
+          toast({
+            title: "Voice filter applied!",
+            description: "Your filtered video is ready to download",
+          });
+        } else if (job?.metadata?.voiceFilter?.status === "failed") {
+          clearInterval(pollInterval);
+          clearTimeout(timeout);
+          setApplyingVoiceFilter(false);
+          
+          toast({
+            title: "Filter failed",
+            description: job.metadata.voiceFilter.errorMessage || "Failed to apply voice filter",
+            variant: "destructive",
+          });
+        }
+      }, 3000);
+      
+    } catch (error: any) {
+      toast({
+        title: "Filter failed",
+        description: error.message || "Failed to apply voice filter",
+        variant: "destructive",
+      });
+      setApplyingVoiceFilter(false);
+    }
+  };
+
   const getProcessingSteps = (): ProcessingStep[] => {
     const job = currentJob;
     if (!job) return [];
@@ -589,6 +674,43 @@ export default function CreatePage() {
                   </Card>
                 )}
 
+                {currentJob.metadata?.voiceFilter?.enhancedVideoPath && (
+                  <Card className="p-6">
+                    <h2 className="text-xl font-semibold mb-2">Voice Filtered Video</h2>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Applied {currentJob.metadata.voiceFilter.preset?.replace('_', ' ')} filter at {currentJob.metadata.voiceFilter.mix}% mix
+                    </p>
+                    <div className="flex gap-3">
+                      <Button size="lg" asChild className="flex-1">
+                        <a href={currentJob.metadata.voiceFilter.enhancedVideoPath} download data-testid="button-download-voice-filtered">
+                          <Download className="h-4 w-4 mr-2" />
+                          Download Filtered Video
+                        </a>
+                      </Button>
+                      <Button 
+                        size="lg" 
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedVoiceFilter("concert_hall");
+                          setVoiceFilterMix(50);
+                          queryClient.setQueryData(['/api/jobs', currentJob.id], {
+                            ...currentJob,
+                            metadata: {
+                              ...currentJob.metadata,
+                              voiceFilter: undefined
+                            }
+                          });
+                        }}
+                        className="flex-1"
+                        data-testid="button-try-different-filter"
+                      >
+                        <RotateCcw className="h-4 w-4 mr-2" />
+                        Try Different Filter
+                      </Button>
+                    </div>
+                  </Card>
+                )}
+
                 <Card className="p-6">
                   <h2 className="text-xl font-semibold mb-4">Next Steps</h2>
                   <div className="flex flex-col gap-3">
@@ -788,6 +910,73 @@ export default function CreatePage() {
                             </div>
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {!currentJob.metadata?.voiceFilter?.enhancedVideoPath && (
+                      <div className="space-y-3 mt-6 pt-6 border-t">
+                        <div className="flex flex-col gap-2">
+                          <label className="text-sm font-medium">Apply Voice Filter (Optional)</label>
+                          <Select 
+                            value={selectedVoiceFilter} 
+                            onValueChange={setSelectedVoiceFilter}
+                            disabled={applyingVoiceFilter}
+                          >
+                            <SelectTrigger data-testid="select-voice-filter">
+                              <SelectValue placeholder="Select filter..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="concert_hall" data-testid="option-concert-hall">Concert Hall</SelectItem>
+                              <SelectItem value="small_room" data-testid="option-small-room">Small Room</SelectItem>
+                              <SelectItem value="cathedral" data-testid="option-cathedral">Cathedral</SelectItem>
+                              <SelectItem value="stadium" data-testid="option-stadium">Stadium</SelectItem>
+                              <SelectItem value="telephone" data-testid="option-telephone">Telephone</SelectItem>
+                              <SelectItem value="radio" data-testid="option-radio">Radio</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            Add acoustic effects to your voice audio
+                          </p>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium">Effect Mix</label>
+                            <span className="text-sm text-muted-foreground font-mono">{voiceFilterMix}%</span>
+                          </div>
+                          <Slider
+                            value={[voiceFilterMix]}
+                            onValueChange={(value) => setVoiceFilterMix(value[0])}
+                            min={0}
+                            max={100}
+                            step={5}
+                            disabled={applyingVoiceFilter}
+                            data-testid="slider-voice-filter-mix"
+                            className="w-full"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            0% = original voice, 100% = full effect
+                          </p>
+                        </div>
+                        <Button 
+                          size="lg" 
+                          variant="secondary" 
+                          onClick={handleApplyVoiceFilter}
+                          disabled={applyingVoiceFilter}
+                          className="w-full"
+                          data-testid="button-apply-voice-filter"
+                        >
+                          {applyingVoiceFilter ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Applying Filter...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-4 w-4 mr-2" />
+                              Apply Voice Filter
+                            </>
+                          )}
+                        </Button>
                       </div>
                     )}
                   </div>

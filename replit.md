@@ -26,6 +26,10 @@ The system offers three primary processing pipelines:
 2.  **Time-Aligned TTS**: Generates speech from text with word-level timing precision but neutral delivery.
 3.  **Lip-Sync (Your Voice)**: A hybrid approach using the user's authentic voice acting combined with AI lip-sync technology. This pipeline includes audio cleanup (ElevenLabs), transcription (Whisper), segment alignment, video time-stretching (FFmpeg), and final lip-sync (Sync Labs).
 
+The system also offers two optional post-processing enhancements:
+4.  **Ambient Sound Enhancement**: Adds professional ambient atmosphere to finished videos using ElevenLabs Sound Effects API (see below).
+5.  **Voice Filter (Pipeline 4)**: Applies acoustic effects to voice audio using FFmpeg built-in filters.
+
 #### Ambient Sound Enhancement (Optional)
 A simplified optional feature that adds professional ambient atmosphere to the finished lip-synced video. Uses ElevenLabs Sound Effects API to generate high-quality ambient sounds based on preset selection or custom user prompts.
 
@@ -73,6 +77,40 @@ A simplified optional feature that adds professional ambient atmosphere to the f
 - Enhanced video becomes available for download alongside original result
 - Completion message shows which preset or custom prompt was used and the applied volume
 - **Iteration Support**: After enhanced video is ready, "Try Different Ambient" button allows users to reset and experiment with different presets, prompts, or volumes without reprocessing the lip-sync
+
+#### Voice Filter (Pipeline 4)
+An optional feature that applies acoustic effects to the voice audio using FFmpeg's built-in audio filters. No external APIs required - all processing happens server-side using FFmpeg.
+
+**Available Filter Presets:**
+- **Concert Hall**: Large reverb with long tail for spacious sound
+- **Small Room**: Short, tight reverb for intimate acoustic
+- **Cathedral**: Very large reverb with very long tail for massive space
+- **Stadium**: Medium-long reverb with early reflections for arena sound
+- **Telephone**: Band-pass filter (300Hz - 3400Hz) for classic phone effect
+- **Radio**: Band-pass with resonance (200Hz - 5000Hz) for AM radio sound
+
+**Technical Implementation:**
+- **FFmpeg Audio Filters**: Uses `aecho` for reverb effects, `highpass`/`lowpass` for telephone/radio effects
+- **Mix Control**: User-adjustable slider (0-100%) controls wet/dry mix - 0% = original voice, 100% = full effect
+- **No External API**: All processing server-side using FFmpeg built-in filters
+- **Applies to Best Available Video**: Uses ambient-enhanced video if available, otherwise uses lip-synced video
+
+**API Endpoint:**
+- `POST /api/jobs/:jobId/apply-voice-filter`
+  - Request body: `{ preset: string, mix: number }`
+  - Preset validation: Must be one of the 6 available presets
+  - Mix range: 0-100 (converted to 0.0-1.0 decimal for FFmpeg)
+  - Runs asynchronously in background
+  - Stores filtered video path, preset, and mix level in job metadata under `voiceFilter`
+
+**UI Flow:**
+- After successful lip-sync completion (with or without ambient enhancement), user sees:
+  - Preset selector dropdown (6 options)
+  - Effect mix slider (0-100%, default 50%)
+- **Apply Workflow**: User selects preset and adjusts mix → clicks "Apply Voice Filter" → system processes video with selected effect
+- Polling updates status every 3 seconds until completion
+- Filtered video becomes available for download alongside other results
+- **Iteration Support**: After filtered video is ready, "Try Different Filter" button allows users to reset and experiment with different presets or mix levels
 
 ## External Dependencies
 
