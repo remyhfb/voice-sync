@@ -599,18 +599,18 @@ export class FFmpegService {
     switch (preset) {
       // EXPERT-VALIDATED REVERB EFFECTS (from professional audio engineering)
       case "concert_hall_expert":
-        // Expert parameters: proven in production audio systems
-        audioFilter = `aecho=0.8:0.88:60:0.4:120:0.3:180:0.25:240:0.2:300:0.15:500:0.1`;
+        // Expert parameters: proven in production audio systems (max 5 delay/decay pairs)
+        audioFilter = `aecho=0.8:0.88:60:0.4:120:0.3:180:0.25:240:0.2:300:0.15`;
         break;
       
       case "cathedral_expert":
-        // Expert parameters: massive cathedral space with extremely long decay
-        audioFilter = `aecho=0.7:0.9:100:0.5:200:0.45:400:0.4:800:0.35:1200:0.3:1600:0.25:2400:0.2:3200:0.15`;
+        // Expert parameters: massive cathedral space with extremely long decay (max 5 delay/decay pairs)
+        audioFilter = `aecho=0.7:0.9:100:0.5:200:0.45:400:0.4:800:0.35:1200:0.3`;
         break;
       
       case "stadium_expert":
-        // Expert parameters: large arena with strong early reflections
-        audioFilter = `aecho=0.75:0.85:150:0.4:300:0.35:600:0.3:1000:0.25:1500:0.2:2500:0.15:3500:0.1`;
+        // Expert parameters: large arena with strong early reflections (max 5 delay/decay pairs)
+        audioFilter = `aecho=0.75:0.85:150:0.4:300:0.35:600:0.3:1000:0.25:1500:0.2`;
         break;
       
       case "small_room_expert":
@@ -749,18 +749,18 @@ export class FFmpegService {
     switch (preset) {
       // EXPERT-VALIDATED REVERB EFFECTS (from professional audio engineering)
       case "concert_hall_expert":
-        // Expert parameters: proven in production audio systems
-        audioFilter = `aecho=0.8:0.88:60:0.4:120:0.3:180:0.25:240:0.2:300:0.15:500:0.1`;
+        // Expert parameters: proven in production audio systems (max 5 delay/decay pairs)
+        audioFilter = `aecho=0.8:0.88:60:0.4:120:0.3:180:0.25:240:0.2:300:0.15`;
         break;
       
       case "cathedral_expert":
-        // Expert parameters: massive cathedral space with extremely long decay
-        audioFilter = `aecho=0.7:0.9:100:0.5:200:0.45:400:0.4:800:0.35:1200:0.3:1600:0.25:2400:0.2:3200:0.15`;
+        // Expert parameters: massive cathedral space with extremely long decay (max 5 delay/decay pairs)
+        audioFilter = `aecho=0.7:0.9:100:0.5:200:0.45:400:0.4:800:0.35:1200:0.3`;
         break;
       
       case "stadium_expert":
-        // Expert parameters: large arena with strong early reflections
-        audioFilter = `aecho=0.75:0.85:150:0.4:300:0.35:600:0.3:1000:0.25:1500:0.2:2500:0.15:3500:0.1`;
+        // Expert parameters: large arena with strong early reflections (max 5 delay/decay pairs)
+        audioFilter = `aecho=0.75:0.85:150:0.4:300:0.35:600:0.3:1000:0.25:1500:0.2`;
         break;
       
       case "small_room_expert":
