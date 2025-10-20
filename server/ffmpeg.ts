@@ -631,7 +631,7 @@ export class FFmpegService {
     // Split audio -> apply filter to one copy -> mix wet/dry
     const dryWeight = (1 - mixDecimal).toFixed(2);
     const wetWeight = mixDecimal.toFixed(2);
-    const filterComplex = `[0:a]asplit=2[dry][wet];[wet]${audioFilter}[filtered];[dry][filtered]amix=inputs=2:weights=${dryWeight} ${wetWeight}:normalize=0[aout]`;
+    const filterComplex = `[0:a]asplit=2[dry][wet];[wet]${audioFilter}[wet_processed];[dry][wet_processed]amix=inputs=2:weights='${dryWeight} ${wetWeight}':normalize=0[aout]`;
 
     return new Promise((resolve, reject) => {
       ffmpeg()
