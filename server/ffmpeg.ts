@@ -412,7 +412,7 @@ export class FFmpegService {
   /**
    * Normalize audio to target loudness level using EBU R128 loudness normalization
    * Targets -14 LUFS (YouTube standard) for consistent volume levels
-   * Uses two-pass normalization for better metadata compatibility
+   * Ensures proper metadata (duration) is embedded for API compatibility
    */
   async normalizeAudioLoudness(
     inputPath: string,
@@ -435,14 +435,15 @@ export class FFmpegService {
 
     return new Promise((resolve, reject) => {
       ffmpeg(inputPath)
-        .audioFilters(`loudnorm=I=${targetLoudness}:TP=${truePeak}:LRA=${loudnessRange}:print_format=summary`)
+        .audioFilters(`loudnorm=I=${targetLoudness}:TP=${truePeak}:LRA=${loudnessRange}`)
         .outputOptions([
           '-f', 'mp3',          // Force MP3 format
           '-acodec', 'libmp3lame',
-          '-ar', '48000',       // 48kHz sample rate
+          '-ar', '48000',       // 48kHz sample rate (Sync Labs recommended)
           '-ac', '2',           // Stereo
           '-ab', '192k',        // 192kbps bitrate
-          '-write_xing', '0'    // Disable Xing header (can cause metadata issues)
+          '-map_metadata', '0', // Preserve input metadata (including duration)
+          '-id3v2_version', '3' // Use ID3v2.3 for maximum compatibility
         ])
         .output(outputPath)
         .on('end', () => {
