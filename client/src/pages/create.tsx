@@ -761,164 +761,163 @@ export default function CreatePage() {
                     <div className="space-y-3">
                       {!currentJob.metadata?.ambientEnhancement?.previewAudioPath ? (
                         <>
-                            <div className="flex flex-col gap-2">
-                              <label className="text-sm font-medium">Add Ambient Sound (Optional)</label>
-                              <Select 
-                                value={selectedAmbientType} 
-                                onValueChange={setSelectedAmbientType}
-                                disabled={!!customAmbientPrompt.trim() || enhancingAmbient}
-                              >
-                                <SelectTrigger data-testid="select-ambient-type">
-                                  <SelectValue placeholder="Select preset..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="office" data-testid="option-office">Office</SelectItem>
-                                  <SelectItem value="cafe" data-testid="option-cafe">Café</SelectItem>
-                                  <SelectItem value="nature" data-testid="option-nature">Nature</SelectItem>
-                                  <SelectItem value="city" data-testid="option-city">City Street</SelectItem>
-                                  <SelectItem value="studio" data-testid="option-studio">Studio</SelectItem>
-                                  <SelectItem value="home" data-testid="option-home">Home</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="flex flex-col gap-2">
-                              <label className="text-sm font-medium">Or enter custom prompt</label>
-                              <Input
-                                type="text"
-                                placeholder="Describe the ambient sound you want (e.g., 'Gentle rain with distant thunder')"
-                                value={customAmbientPrompt}
-                                onChange={(e) => setCustomAmbientPrompt(e.target.value)}
-                                disabled={enhancingAmbient}
-                                maxLength={200}
-                                data-testid="input-custom-prompt"
-                                className="font-mono text-sm"
-                              />
-                              {customAmbientPrompt.length > 0 && (
-                                <p className="text-xs text-muted-foreground">
-                                  {customAmbientPrompt.length}/200 characters
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex flex-col gap-2">
-                              <div className="flex items-center justify-between">
-                                <label className="text-sm font-medium">Ambient Volume</label>
-                                <span className="text-sm text-muted-foreground font-mono">{ambientVolume}%</span>
-                              </div>
-                              <Slider
-                                value={[ambientVolume]}
-                                onValueChange={(value) => setAmbientVolume(value[0])}
-                                min={0}
-                                max={100}
-                                step={5}
-                                disabled={enhancingAmbient}
-                                data-testid="slider-ambient-volume"
-                                className="w-full"
-                              />
+                          <div className="flex flex-col gap-2">
+                            <label className="text-sm font-medium">Preset Selection</label>
+                            <Select 
+                              value={selectedAmbientType} 
+                              onValueChange={setSelectedAmbientType}
+                              disabled={!!customAmbientPrompt.trim() || enhancingAmbient}
+                            >
+                              <SelectTrigger data-testid="select-ambient-type">
+                                <SelectValue placeholder="Select preset..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="office" data-testid="option-office">Office</SelectItem>
+                                <SelectItem value="cafe" data-testid="option-cafe">Café</SelectItem>
+                                <SelectItem value="nature" data-testid="option-nature">Nature</SelectItem>
+                                <SelectItem value="city" data-testid="option-city">City Street</SelectItem>
+                                <SelectItem value="studio" data-testid="option-studio">Studio</SelectItem>
+                                <SelectItem value="home" data-testid="option-home">Home</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <label className="text-sm font-medium">Or enter custom prompt</label>
+                            <Input
+                              type="text"
+                              placeholder="Describe the ambient sound you want (e.g., 'Gentle rain with distant thunder')"
+                              value={customAmbientPrompt}
+                              onChange={(e) => setCustomAmbientPrompt(e.target.value)}
+                              disabled={enhancingAmbient}
+                              maxLength={200}
+                              data-testid="input-custom-prompt"
+                              className="font-mono text-sm"
+                            />
+                            {customAmbientPrompt.length > 0 && (
                               <p className="text-xs text-muted-foreground">
-                                Adjust how loud the ambient sound will be relative to your voice
+                                {customAmbientPrompt.length}/200 characters
                               </p>
+                            )}
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between">
+                              <label className="text-sm font-medium">Ambient Volume</label>
+                              <span className="text-sm text-muted-foreground font-mono">{ambientVolume}%</span>
                             </div>
+                            <Slider
+                              value={[ambientVolume]}
+                              onValueChange={(value) => setAmbientVolume(value[0])}
+                              min={0}
+                              max={100}
+                              step={5}
+                              disabled={enhancingAmbient}
+                              data-testid="slider-ambient-volume"
+                              className="w-full"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Adjust how loud the ambient sound will be relative to your voice
+                            </p>
+                          </div>
+                          <Button 
+                            size="lg" 
+                            variant="secondary" 
+                            onClick={handlePreviewAmbient}
+                            disabled={enhancingAmbient}
+                            className="w-full"
+                            data-testid="button-preview-ambient"
+                          >
+                            {enhancingAmbient ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Generating Preview...
+                              </>
+                            ) : (
+                              <>
+                                <Volume2 className="h-4 w-4 mr-2" />
+                                Preview Ambient Sound
+                              </>
+                            )}
+                          </Button>
+                          </>
+                        ) : (
+                        <div className="space-y-3 p-4 border rounded-lg bg-card">
+                          <h3 className="text-sm font-semibold">Preview: {currentJob.metadata.ambientEnhancement.customPrompt || `${currentJob.metadata.ambientEnhancement.preset} ambience`}</h3>
+                          <audio 
+                            ref={audioPreviewRef}
+                            controls 
+                            className="w-full"
+                            data-testid="audio-preview-player"
+                          >
+                            <source src={currentJob.metadata.ambientEnhancement.previewAudioPath} type="audio/mpeg" />
+                            Your browser does not support the audio tag.
+                          </audio>
+                          <p className="text-xs text-muted-foreground">
+                            Listen to the preview above. If you like it, adjust the volume and apply it to your video.
+                          </p>
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between">
+                              <label className="text-sm font-medium">Ambient Volume</label>
+                              <span className="text-sm text-muted-foreground font-mono">{ambientVolume}%</span>
+                            </div>
+                            <Slider
+                              value={[ambientVolume]}
+                              onValueChange={(value) => setAmbientVolume(value[0])}
+                              min={0}
+                              max={100}
+                              step={5}
+                              disabled={enhancingAmbient}
+                              data-testid="slider-ambient-volume-preview"
+                              className="w-full"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              This volume will be applied when you add the ambient sound to your video
+                            </p>
+                          </div>
+                          <div className="flex gap-3">
                             <Button 
                               size="lg" 
-                              variant="secondary" 
-                              onClick={handlePreviewAmbient}
+                              onClick={handleApplyAmbient}
                               disabled={enhancingAmbient}
-                              className="w-full"
-                              data-testid="button-preview-ambient"
+                              className="flex-1"
+                              data-testid="button-apply-ambient"
                             >
                               {enhancingAmbient ? (
                                 <>
                                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                  Generating Preview...
+                                  Mixing with Video...
                                 </>
                               ) : (
                                 <>
-                                  <Volume2 className="h-4 w-4 mr-2" />
-                                  Preview Ambient Sound
+                                  <Download className="h-4 w-4 mr-2" />
+                                  Apply to Video
                                 </>
                               )}
                             </Button>
-                          </>
-                        ) : (
-                          <div className="space-y-3 p-4 border rounded-lg bg-card">
-                            <h3 className="text-sm font-semibold">Preview: {currentJob.metadata.ambientEnhancement.customPrompt || `${currentJob.metadata.ambientEnhancement.preset} ambience`}</h3>
-                            <audio 
-                              ref={audioPreviewRef}
-                              controls 
-                              className="w-full"
-                              data-testid="audio-preview-player"
+                            <Button 
+                              size="lg"
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedAmbientType("");
+                                setCustomAmbientPrompt("");
+                                queryClient.setQueryData(['/api/jobs', currentJob.id], {
+                                  ...currentJob,
+                                  metadata: {
+                                    ...currentJob.metadata,
+                                    ambientEnhancement: undefined
+                                  }
+                                });
+                              }}
+                              disabled={enhancingAmbient}
+                              className="flex-1"
+                              data-testid="button-try-different"
                             >
-                              <source src={currentJob.metadata.ambientEnhancement.previewAudioPath} type="audio/mpeg" />
-                              Your browser does not support the audio tag.
-                            </audio>
-                            <p className="text-xs text-muted-foreground">
-                              Listen to the preview above. If you like it, adjust the volume and apply it to your video.
-                            </p>
-                            <div className="flex flex-col gap-2">
-                              <div className="flex items-center justify-between">
-                                <label className="text-sm font-medium">Ambient Volume</label>
-                                <span className="text-sm text-muted-foreground font-mono">{ambientVolume}%</span>
-                              </div>
-                              <Slider
-                                value={[ambientVolume]}
-                                onValueChange={(value) => setAmbientVolume(value[0])}
-                                min={0}
-                                max={100}
-                                step={5}
-                                disabled={enhancingAmbient}
-                                data-testid="slider-ambient-volume-preview"
-                                className="w-full"
-                              />
-                              <p className="text-xs text-muted-foreground">
-                                This volume will be applied when you add the ambient sound to your video
-                              </p>
-                            </div>
-                            <div className="flex gap-3">
-                              <Button 
-                                size="lg" 
-                                onClick={handleApplyAmbient}
-                                disabled={enhancingAmbient}
-                                className="flex-1"
-                                data-testid="button-apply-ambient"
-                              >
-                                {enhancingAmbient ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    Mixing with Video...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Download className="h-4 w-4 mr-2" />
-                                    Apply to Video
-                                  </>
-                                )}
-                              </Button>
-                              <Button 
-                                size="lg"
-                                variant="outline"
-                                onClick={() => {
-                                  setSelectedAmbientType("");
-                                  setCustomAmbientPrompt("");
-                                  queryClient.setQueryData(['/api/jobs', currentJob.id], {
-                                    ...currentJob,
-                                    metadata: {
-                                      ...currentJob.metadata,
-                                      ambientEnhancement: undefined
-                                    }
-                                  });
-                                }}
-                                disabled={enhancingAmbient}
-                                className="flex-1"
-                                data-testid="button-try-different"
-                              >
-                                <RotateCcw className="h-4 w-4 mr-2" />
-                                Try Different Sound
-                              </Button>
-                            </div>
+                              <RotateCcw className="h-4 w-4 mr-2" />
+                              Try Different Sound
+                            </Button>
                           </div>
-                        )}
-                      </div>
-                    )}
+                        </div>
+                      )}
+                    </div>
                   </Card>
                 )}
 
