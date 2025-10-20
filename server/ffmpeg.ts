@@ -4,6 +4,7 @@ import ffprobeInstaller from "@ffprobe-installer/ffprobe";
 import { promises as fs } from "fs";
 import path from "path";
 import { spawn } from "child_process";
+import { randomUUID } from "crypto";
 import { logger } from "./logger";
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
@@ -90,39 +91,143 @@ export class FFmpegService {
   }
 
   /**
+   * Normalize audio loudness to industry standard (-14 LUFS for streaming platforms)
+   * Uses two-pass EBU R128 loudness normalization
+   */
+  private async normalizeLoudness(
+    inputPath: string,
+    outputPath: string
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // Pass 1: Analyze loudness and get stats
+      const pass1Args = [
+        '-i', inputPath,
+        '-af', 'loudnorm=I=-14:TP=-1.5:LRA=11:print_format=json',
+        '-f', 'null',
+        '-'
+      ];
+
+      logger.debug("FFmpeg", "Starting loudness analysis (pass 1)");
+      
+      const pass1 = spawn(ffmpegInstaller.path, pass1Args);
+      let stderr = '';
+
+      pass1.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      pass1.on('close', (code) => {
+        if (code !== 0) {
+          return reject(new Error('Loudness analysis failed'));
+        }
+
+        // Extract JSON stats from stderr
+        const jsonMatch = stderr.match(/\{[^}]*"input_i"[^}]*\}/);
+        if (!jsonMatch) {
+          return reject(new Error('Could not parse loudness stats'));
+        }
+
+        let stats;
+        try {
+          stats = JSON.parse(jsonMatch[0]);
+        } catch (e) {
+          return reject(new Error('Invalid loudness stats JSON'));
+        }
+
+        logger.debug("FFmpeg", "Loudness analysis complete", {
+          input_i: stats.input_i,
+          input_tp: stats.input_tp,
+          input_lra: stats.input_lra,
+          input_thresh: stats.input_thresh
+        });
+
+        // Pass 2: Apply normalization using measured stats
+        const loudnormFilter = `loudnorm=I=-14:TP=-1.5:LRA=11:measured_I=${stats.input_i}:measured_TP=${stats.input_tp}:measured_LRA=${stats.input_lra}:measured_thresh=${stats.input_thresh}:offset=${stats.target_offset}:linear=true:print_format=summary`;
+
+        logger.debug("FFmpeg", "Applying normalization (pass 2)");
+
+        ffmpeg(inputPath)
+          .videoCodec('copy')  // Copy video stream unchanged
+          .audioCodec('aac')   // Re-encode audio with normalization
+          .audioFilters(loudnormFilter)
+          .audioBitrate('192k')
+          .output(outputPath)
+          .on('end', () => {
+            logger.info("FFmpeg", "Loudness normalization complete (-14 LUFS target)");
+            resolve();
+          })
+          .on('error', (err: any) => {
+            reject(new Error(`Normalization error: ${err.message}`));
+          })
+          .run();
+      });
+
+      pass1.on('error', (err) => {
+        reject(new Error(`FFmpeg spawn error: ${err.message}`));
+      });
+    });
+  }
+
+  /**
    * Re-encode video for maximum browser compatibility
    * Uses H.264/AAC codecs which are universally supported
-   * Boosts audio by 30% to compensate for volume loss in earlier pipeline stages
+   * Applies loudness normalization to ensure consistent audio levels
    */
   async reencodeForBrowser(
     inputPath: string,
     outputPath: string,
   ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      // Re-encode to H.264/AAC which is universally supported by browsers
-      ffmpeg(inputPath)
-        .videoCodec('libx264')
-        .audioCodec('aac')
-        .audioFilters('volume=1.3')  // Boost audio by 30% to restore lost volume
-        .outputOptions([
-          '-preset', 'fast',           // Fast encoding
-          '-crf', '23',                // Good quality (lower = better, 23 is default)
-          '-b:a', '192k',              // Audio bitrate for quality
-          '-pix_fmt', 'yuv420p',       // Pixel format for maximum compatibility
-          '-movflags', '+faststart',   // Enable streaming (metadata at start)
-          '-profile:v', 'main',        // H.264 main profile for compatibility
-          '-level', '4.0',             // H.264 level for wide device support
-        ])
-        .output(outputPath)
-        .on('end', () => {
-          logger.info("FFmpeg", "Re-encoded for browser compatibility (30% volume boost applied)");
-          resolve();
-        })
-        .on('error', (err: any) => {
-          reject(new Error(`FFmpeg re-encode error: ${err.message}`));
-        })
-        .run();
-    });
+    // First normalize loudness to -14 LUFS (YouTube/streaming standard)
+    const normalizedPath = `/tmp/normalized_${randomUUID()}.mp4`;
+    
+    try {
+      await this.normalizeLoudness(inputPath, normalizedPath);
+      
+      return new Promise((resolve, reject) => {
+        // Then re-encode for browser compatibility
+        ffmpeg(normalizedPath)
+          .videoCodec('libx264')
+          .audioCodec('aac')
+          .outputOptions([
+            '-preset', 'fast',           // Fast encoding
+            '-crf', '23',                // Good quality (lower = better, 23 is default)
+            '-b:a', '192k',              // Audio bitrate for quality
+            '-pix_fmt', 'yuv420p',       // Pixel format for maximum compatibility
+            '-movflags', '+faststart',   // Enable streaming (metadata at start)
+            '-profile:v', 'main',        // H.264 main profile for compatibility
+            '-level', '4.0',             // H.264 level for wide device support
+          ])
+          .output(outputPath)
+          .on('end', async () => {
+            // Clean up temp file
+            try {
+              await fs.unlink(normalizedPath);
+            } catch (e) {
+              // Ignore cleanup errors
+            }
+            logger.info("FFmpeg", "Re-encoded for browser compatibility with loudness normalization");
+            resolve();
+          })
+          .on('error', async (err: any) => {
+            // Clean up temp file
+            try {
+              await fs.unlink(normalizedPath);
+            } catch (e) {
+              // Ignore cleanup errors
+            }
+            reject(new Error(`FFmpeg re-encode error: ${err.message}`));
+          })
+          .run();
+      });
+    } catch (error) {
+      // Clean up temp file if normalization failed
+      try {
+        await fs.unlink(normalizedPath);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+      throw error;
+    }
   }
 
   /**
