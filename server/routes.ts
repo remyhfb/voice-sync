@@ -289,10 +289,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Generate signed GET URL (1 hour TTL) for Sync Labs to download
           const videoReadUrl = await objectStorageService.getSignedReadURL(videoUploadUrl, 3600);
           
-          // Upload cleaned audio for Sync Labs
+          // Upload trimmed audio for Sync Labs (must match what was used for time-stretching)
           const audioUploadUrl = await objectStorageService.getObjectEntityUploadURL();
-          const audioBuffer = await fs.readFile(cleanedUserAudioPath);
-          const audioStats = await fs.stat(cleanedUserAudioPath);
+          const audioBuffer = await fs.readFile(trimmedUserAudioPath);
+          const audioStats = await fs.stat(trimmedUserAudioPath);
           await fetch(audioUploadUrl, {
             method: 'PUT',
             body: audioBuffer,
