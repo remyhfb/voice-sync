@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { FileUploadZone } from "@/components/file-upload-zone";
 import { ProcessingTimeline, ProcessingStep } from "@/components/processing-timeline";
 import { PacingReport } from "@/components/PacingReport";
@@ -17,9 +18,20 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { ProcessingJob } from "@shared/schema";
 
 export default function CreatePage() {
+  const [, setLocation] = useLocation();
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  
+  // Parse jobId from query parameter on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const jobId = params.get('jobId');
+    if (jobId) {
+      setCurrentJobId(jobId);
+    }
+  }, []);
+  
   const [analyzingPacing, setAnalyzingPacing] = useState(false);
   const [enhancingAmbient, setEnhancingAmbient] = useState(false);
   const [selectedAmbientType, setSelectedAmbientType] = useState<string>("office");

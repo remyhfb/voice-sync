@@ -9,7 +9,7 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### Frontend
-The frontend is built with React and TypeScript, using Vite, Wouter for routing, and TanStack Query for server state management. It utilizes `shadcn/ui` and Tailwind CSS for a professional dark theme with a vibrant purple primary color. The component architecture is modular, with custom components for functionalities like `FileUploadZone`, `ProcessingTimeline`, `VoiceCloneCard`, and `QualityMeter`. Form handling is managed with `react-hook-form` and Zod for validation.
+The frontend is built with React and TypeScript, using Vite, Wouter for routing, and TanStack Query for server state management. It utilizes `shadcn/ui` and Tailwind CSS for a professional dark theme with a vibrant purple primary color. The component architecture is modular, with custom components for functionalities like `FileUploadZone`, `ProcessingTimeline`, `VoiceCloneCard`, `QualityMeter`, and the optional `EditVideoPage` for trimming unwanted footage. Form handling is managed with `react-hook-form` and Zod for validation.
 
 ### Backend
 The backend uses Express.js with TypeScript and ESM, following a RESTful design. It includes Multer for file uploads and FFmpeg integration for video/audio processing. The system implements a multi-step job processing pipeline with status and progress tracking.
@@ -21,6 +21,26 @@ PostgreSQL, accessed via Neon serverless driver and Drizzle ORM, handles persist
 VoiceSwap emphasizes processing transparency through visual feedback and real-time progress updates. It maintains technical professionalism with monospace fonts, quality metrics, and professional status badges, ensuring workflow clarity via step-by-step pipeline visualization and user-friendly messages.
 
 ### Feature Specifications
+
+#### Video Editor (Optional Pre-Processing)
+An optional video trimming feature allows users to remove unwanted segments (AI artifacts, defective frames, moments where the face is not visible) before processing. This is critical because feeding "defective" video to time-stretch and lip-sync will produce poor results.
+
+**Technical Implementation:**
+- **Route**: `/edit/:jobId` - Optional video editor page
+- **API Endpoint**: `POST /api/jobs/:jobId/trim` - Trims and concatenates video segments
+- **Storage**: Trimmed video stored in object storage, path saved in `job.metadata.trimmedVideoPath`
+- **Pipeline Integration**: Helper function `getActiveVideoPath(job)` returns trimmed video if available, otherwise original video
+- **FFmpeg Processing**: Re-encodes with libx264/aac for reliability (MVP approach)
+- **Error Isolation**: Trim failures don't block pipeline processing
+- **UI Features**: Video player with timeline, segment management (add/remove/edit), skip option
+
+**User Flow:**
+1. User uploads video and creates job
+2. Optionally navigates to `/edit/:jobId` to trim video
+3. Selects segments to keep, removes unwanted parts
+4. Clicks "Trim & Continue" (or "Skip Editing")
+5. Returns to create page with trimmed video ready for processing
+
 The system offers three primary processing pipelines:
 1.  **Speech-to-Speech (For VEO)**: Preserves professional acting/emotion while replacing the voice.
 2.  **Time-Aligned TTS**: Generates speech from text with word-level timing precision but neutral delivery.

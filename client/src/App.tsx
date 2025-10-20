@@ -9,12 +9,14 @@ import { ThemeProvider } from "@/components/theme-provider";
 import CreatePage from "@/pages/create";
 import ProjectsPage from "@/pages/projects";
 import SettingsPage from "@/pages/settings";
+import EditVideoPage from "@/pages/edit-video";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={CreatePage} />
+      <Route path="/edit/:jobId" component={EditVideoPage} />
       <Route path="/projects" component={ProjectsPage} />
       <Route path="/settings" component={SettingsPage} />
       <Route component={NotFound} />
